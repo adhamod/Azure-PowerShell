@@ -1,62 +1,39 @@
 ﻿<#
-Starts a copy operation of a specific blob.
+Starts a copy operation of a specific blob. This script works for both ARM and ASM.
+
+User input is required.
 #>
 
-# Switch between ASM and ARM
-$mode = Read-Host "Type ASM to use Azure Service Management, or type ARM to use Azure Resource Manager"
 
-switch ($mode)
-{
-    # Use ASM
-    "ASM" {
+##################################
+# START OF REQUIRED USER INPUT
+##################################
 
-        Switch-AzureMode AzureServiceManagement -WarningAction SilentlyContinue
-        
-        #### Not yet finished
+# Connection String for the SOURCE storage account
+$srcConnectionString = "DefaultEndpointsProtocol=https;AccountName=testresourcegroup16710;AccountKey=xxx"
 
+# Container name in which the SOURCE file is located (container must be inside SOURCE storage account)
+$srcContainerName = "vhds"
 
-    }
+# Blob name of the SOURCE file (must be located inside SOURCE container)
+$srcBlobName = "testVM-SV3-2.vhd"
 
-    # Use ARM
-    "ARM" {
-        
-        Switch-AzureMode AzureResourceManager -WarningAction SilentlyContinue
-        
-        #########
-        # SOURCE
-        #########
+###
 
-        # Get connection string for the SOURCE storage account
-        # $srcConnectionString = Read-Host "Please paste the connection string of the Source storage account"
-        $srcConnectionString = "DefaultEndpointsProtocol=https;AccountName=testresourcegroup16710;AccountKey=WUD0Bcn/yBtu/3/Ee9uaZ/F3GOeZGWKY6vBIUkc1FTHHEtWK/UyLd9tzA0aerOLfYY8Ws8UtVxRvpZGIGuNh+g=="
+# Connection String for the SOURCE storage account
+$destConnectionString = "DefaultEndpointsProtocol=https;AccountName=teststore123456;AccountKey=xxx"
 
-        # Make context for SOURCE storage account
-        $srcContext = New-AzureStorageContext -ConnectionString $srcConnectionString
-        
-        # Get container name and blob name of SOURCE file
-        $srcContainerName = "vhds"
-        $srcBlobName = "testVM-SV3-2.vhd"
+# Container name in which the DESTINATION file will be located (container must be inside DESTINATION storage account)
+$destContainerName = "testblob"
 
+##################################
+# END OF REQUIRED USER INPUT
+##################################
 
-        #########
-        # DESTINATION
-        #########
+# Make context for SOURCE storage account
+$srcContext = New-AzureStorageContext -ConnectionString $srcConnectionString
+# Make context for DESTINATION storage account
+$destContext = New-AzureStorageContext -ConnectionString $destConnectionString
 
-        # Get connection string for the DESTINATION storage account
-        # $srcConnectionString = Read-Host "Please paste the connection string of the Destination storage account"
-        $destConnectionString = "DefaultEndpointsProtocol=https;AccountName=teststore123456;AccountKey=V7LvSTswsEknsbLU2NJg1+AhoSc7k/mVRYGDVwGh2B5FGqkon5Zyj44+dOY+p4JJcWZ49rb/6b/wPobtaxbVXw=="
-        
-        # Make context for SOURCE storage account
-        $destContext = New-AzureStorageContext -ConnectionString $destConnectionString
-
-        # Get container name of DESTINATION file
-        $destContainerName = "testblob"
-
-        # Start copy operation
-        Start-AzureStorageBlobCopy -Context $srcContext -SrcContainer $srcContainerName -SrcBlob $srcBlobName -DestContext $destContext -DestContainer $destContainerName
-
-    }
-
-    # Error handling in case of incorrect user input.
-    default {"Incorrect input. Please type in ASM or ARM when running this script again"; break}
-}
+# Start copy operation
+Start-AzureStorageBlobCopy -Context $srcContext -SrcContainer $srcContainerName -SrcBlob $srcBlobName -DestContext $destContext -DestContainer $destContainerName
