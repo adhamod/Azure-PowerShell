@@ -20,7 +20,7 @@ $srcBlobName = "testVM-SV3-2.vhd"
 
 ###
 
-# Connection String for the SOURCE storage account
+# Connection String for the DESTINATION storage account
 $destConnectionString = "DefaultEndpointsProtocol=https;AccountName=teststore123456;AccountKey=xxx"
 
 # Container name in which the DESTINATION file will be located (container must be inside DESTINATION storage account)
