@@ -1,10 +1,5 @@
 ﻿<#
-Starts a copy operation from a specific blob to another in ARM.
-
-Prerequisites:
-    - The Subscription to which the blob will be copied is already
-    the current Subscription. I.e., the DESTINATION subscription 
-    is already set as the current subscription in PowerShell.
+Starts a copy operation of a specific blob.
 #>
 
 # Switch between ASM and ARM
