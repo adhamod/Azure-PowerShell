@@ -1,0 +1,495 @@
+/***********************************************************************************************
+  This template creates:
+    + 3 Storage Accounts: 
+      - 1 for each SQL Server node running on a Windows Server VM
+      - 1 for the witness VM running on Windows Server
+    + 1 Availability Set for the SQL Nodes
+    + 1 Internal Load Balancer for the SQL nodes
+    + 3 NICs: 1 for each SQL nodes and 1 for the witness VM
+    + 3 VMs: 1 for each SQL node and 1 for the witness
+
+************************************************************************************************/
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmAdminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Admin username for both SQL nodes and Witness"
+      }
+    },
+    "vmAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin password for both SQL nodes and Witness"
+      }
+    },
+
+    "sqlVmName": {
+      "type": "string",
+      "metadata": {
+        "description": "VM prefix name for both SQL nodes"
+      }
+    },
+    "sqlVm1IPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "VM static private IP address for SQL Node 1"
+      }
+    },
+    "sqlVm2IPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "VM static private IP address for SQL Node 2"
+      }
+    },
+    "sqlVmNicName": {
+      "type": "string",
+      "metadata": {
+        "description": "VM prefix name for both SQL nodes' NICs"
+      }
+
+    },
+    "sqlILBName": {
+      "type": "string",
+      "metadata": {
+        "description": "Internal Load Balancer name for both SQL nodes"
+      }
+    },
+    "sqlILBIPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "Internal Load Balancer private IP Address for both SQL nodes"
+      }
+    },
+    "sqlAvailabilitySetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Availability Set Name for both SQL nodes"
+      }
+    },
+    "sqlImageOffer": {
+      "type": "string",
+      "defaultValue": "SQL2012SP2-WS2012R2",
+      "metadata": {
+        "description": "The image offer of the SQL Server for each SQL node."
+      },
+      "allowedValues": [
+        "SQL2008R2SP3-WS2008R2SP1",
+        "SQL2012SP2-WS2012",
+        "SQL2012SP2-WS2012R2",
+        "SQL2014-WS2012R2",
+        "SQL2014SP1-WS2012R2"
+      ]
+    },
+    "sqlImageSKU": {
+      "type": "string",
+      "defaultValue": "Enterprise",
+      "metadata": {
+        "description": "The SKU of th SQL Server image for each SQL node."
+      },
+      "allowedValues": [
+        "Enterprise",
+        "Enterprise-Optimized-for-DW",
+        "Enterprise-Optimized-for-OLTP",
+        "Standard",
+        "Web"
+      ]
+    },
+    "sqlSAName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage Account prefix name for both SQL nodes"
+      }
+    },
+    "sqlSAType": {
+      "type": "string",
+      "metadata": {
+        "description": "Type of storage account for the SQL Server VM disks"
+      },
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_RAGRS",
+        "Standard_ZRS",
+        "Premium_LRS",
+        "Standard_GRS"
+      ]
+    },
+
+    "witVmName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name for witness VM"
+      }
+    },
+    "witVmIPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "VM static private IP address for the Witness VM"
+      }
+    },
+    "witVmNicName": {
+      "type": "string",
+      "metadata": {
+        "description": "NIC name for witness VM"
+      }
+
+    },
+    "witSAName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage Account name for witness VM"
+      }
+    },
+    "witSAType": {
+      "type": "string",
+      "metadata": {
+        "description": "Type of storage account for the Witness VM disk"
+      },
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_RAGRS",
+        "Standard_ZRS",
+        "Premium_LRS",
+        "Standard_GRS"
+      ]
+    },
+
+    "existingRGName": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing Resource Group Name for the Vnet to place SQL nodes and witness VM"
+      }
+    },
+    "subnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing Subnet Name for SQL nodes and Witness VM"
+      }
+    },
+    "vnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing VNet Name for the subnet of SQL nodes and witness VM"
+      }
+    }
+  },
+
+  "variables": {
+    /* Notes:
+      The Load Balancer Front End and Back End variables are necessary for the 
+      Internal Load Balancer configuration. AFAIK, it does nothing other than name the
+      front end and back end of the Internal Load Balancer (i.e. no front end subnet address or
+      back end subnet address is specified).
+      */
+    "LBFrontEnd": "LBFE",
+    "LBBackEnd": "LBBE",
+    "subnetRef": "[concat(variables('vnetID'),'/subnets/', parameters('subnetName'))]",
+    "vnetID": "[resourceId(parameters('existingRGName'),'Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+
+    "sqlImagePublisher": "MicrosoftSQLServer", // Publisher name is not just Microsoft
+    "sqlvmSize": "Standard_D4", // TODO: make this customizable
+    "sqlAOListener": "SQLAlwaysOnEndPointListener",
+    "sqlILBID": "[resourceId('Microsoft.Network/loadBalancers',parameters('sqlILBName'))]",
+    "sqlAOProbe": "SQLAlwaysOnEndPointProbe",
+    "sqlILBProbeID": "[concat(variables('sqlILBID'),'/probes/',variables('sqlAOProbe'))]",
+    "sqlILBFrontEndConfigID": "[concat(variables('sqlILBID'),'/frontendIPConfigurations/',variables('LBFrontEnd'))]",
+    "sqlILBBackEndAddressPoolID": "[concat(variables('sqlILBID'),'/backendAddressPools/',variables('LBBackEnd'))]",
+
+    "witImageOffer": "WindowsServer",
+    "witImagePublisher": "MicrosoftWindowsServer",
+    "witImageSKU": "2012-R2-Datacenter",
+    "witVmSize": "Basic_A2" // TODO: make this customizable
+
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[concat(parameters('sqlSAName'), copyindex(1))]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[concat(parameters('sqlSAName'), copyindex(1))]"
+      },
+      "copy": {
+        "name": "storageAccountLoop",
+        "count": 2
+      },
+      "properties": {
+        "accountType": "[parameters('sqlSAType')]"
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[parameters('witSAName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('witSAName')]"
+      },
+      "properties": {
+        "accountType": "[parameters('witSAType')]"
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/availabilitySets",
+      "name": "[parameters('sqlavailabilitySetName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('sqlavailabilitySetName')]"
+      },
+      "properties": {
+        "platformFaultDomainCount": 2,
+        "platformUpdateDomainCount": 2
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "name": "[parameters('sqlILBName')]",
+      "type": "Microsoft.Network/loadBalancers",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('sqlILBName')]"
+      },
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "[variables('LBFrontEnd')]",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "[parameters('sqlILBIPAddress')]",
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "[variables('LBBackEnd')]"
+          }
+        ],
+        "loadBalancingRules": [
+          {
+            "name": "[variables('sqlAOListener')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('sqlILBFrontEndConfigID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('sqlILBBackEndAddressPoolID')]"
+              },
+              "probe": {
+                "id": "[variables('sqlILBProbeID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 1433,
+              "backendPort": 1433,
+              "enableFloatingIP": true
+            }
+          }
+        ],
+        "probes": [
+          {
+            "name": "[variables('sqlAOProbe')]",
+            "properties": {
+              "protocol": "tcp",
+              "port": 59999,
+              "intervalInSeconds": 5,
+              "numberOfProbes": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(parameters('sqlVmNicName'), '1')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[concat(parameters('sqlVmNicName'), '1')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/loadBalancers/', parameters('sqlILBName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('sqlVm1IPAddress')]",
+              "privateIPAllocationMethod": "Static",
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              },
+              "loadBalancerBackendAddressPools": [
+                {
+                  "id": "[variables('sqlILBBackEndAddressPoolID')]"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(parameters('sqlVmNicName'), '2')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[concat(parameters('sqlVmNicName'), '2')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/loadBalancers/', parameters('sqlILBName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('sqlVm2IPAddress')]",
+              "privateIPAllocationMethod": "Static",
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              },
+              "loadBalancerBackendAddressPools": [
+                {
+                  "id": "[variables('sqlILBBackEndAddressPoolID')]"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "name": "[parameters('witVmNicName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('witVmNicName')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('witVmIPAddress')]",
+              "privateIPAllocationMethod": "Static",
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[concat(parameters('sqlVMName'), copyindex(1))]",
+      "copy": {
+        "name": "virtualMachineLoop",
+        "count": 2
+      },
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[concat(parameters('sqlVMName'), copyindex(1))]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', parameters('sqlSAName'), copyindex(1))]",
+        "[concat('Microsoft.Network/networkInterfaces/', parameters('sqlVmNicName'), copyindex(1))]",
+        "[concat('Microsoft.Compute/availabilitySets/', parameters('sqlAvailabilitySetName'))]"
+      ],
+      "properties": {
+        "availabilitySet": {
+          "id": "[resourceId('Microsoft.Compute/availabilitySets',parameters('sqlAvailabilitySetName'))]"
+        },
+        "hardwareProfile": {
+          "vmSize": "[variables('sqlVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[concat(parameters('sqlVMName'), copyindex(1))]",
+          "adminUsername": "[parameters('vmAdminUsername')]",
+          "adminPassword": "[parameters('vmAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('sqlImagePublisher')]",
+            "offer": "[parameters('sqlImageOffer')]",
+            "sku": "[parameters('sqlImageSKU')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "OSDisk",
+            "vhd": {
+              "uri": "[concat('http://',parameters('sqlSAName'), copyindex(1),'.blob.core.windows.net/vhds/','OSDisk', copyindex(1), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('sqlVmNicName'),copyindex(1)))]"
+            }
+          ]
+        }
+      }
+    },
+
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[parameters('witVMName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('witVMName')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', parameters('witSAName'))]",
+        "[concat('Microsoft.Network/networkInterfaces/', parameters('witVmNicName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('witVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('witVMName')]",
+          "adminUsername": "[parameters('vmAdminUsername')]",
+          "adminPassword": "[parameters('vmAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('witImagePublisher')]",
+            "offer": "[variables('witImageOffer')]",
+            "sku": "[variables('witImageSKU')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "OSDisk",
+            "vhd": {
+              "uri": "[concat('http://',parameters('witSAName'),'.blob.core.windows.net/vhds/','OSDisk','.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('witVmNicName')))]"
+
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
