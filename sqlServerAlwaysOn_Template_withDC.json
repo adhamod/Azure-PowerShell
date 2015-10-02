@@ -1,0 +1,788 @@
+/***********************************************************************************************
+  This template creates:
+    + 5 Storage Accounts: 
+      - 1 for each SQL Server VM
+      - 1 for each Domain Controller (DC) server VM
+      - 1 for the witness VM 
+    + 1 VNet with:
+      - 1 Subnet for SQL Server and Witness VMs
+      - 1 Subnet for the ILB and the DC Server VMs
+    + 2 Availability Sets
+      - 1 for the SQL Server VM
+      - 1 for the DC server VM
+    + 1 Internal Load Balancer (ILB) for the SQL Server nodes with:
+      - a Listener configured
+    + 5 public IP addresses: 1 for each VM
+    + 5 NICs: 1 for each VM
+    + 5 VMs:
+      - 2 SQL Server running on Windows Server
+      - 1 witness VM running on Windows Server
+      - 2 DC servers running on Windows Server
+
+  Author: Carlos Patiño, carpat@microsoft.com
+
+************************************************************************************************/
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmAdminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Admin username for SQL nodes, Witness, and DC server VMs"
+      }
+    },
+    "vmAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin password for both SQL nodes and Witness"
+      }
+    },
+
+    "sqlVmName": {
+      "type": "string",
+      "metadata": {
+        "description": "VM prefix name for both SQL nodes"
+      }
+    },
+    "sqlVm1IPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "VM static private IP address for SQL Node 1"
+      }
+    },
+    "sqlVm2IPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "VM static private IP address for SQL Node 2"
+      }
+    },
+    "sqlPublicDNSName": {
+      "type": "string",
+      "metadata": {
+        "description": "Prefix for unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    },
+    "sqlILBName": {
+      "type": "string",
+      "metadata": {
+        "description": "Internal Load Balancer name for both SQL nodes"
+      }
+    },
+    "sqlILBIPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "Internal Load Balancer private IP Address for both SQL nodes"
+      }
+    },
+    "sqlAvailabilitySetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Availability Set Name for both SQL nodes"
+      }
+    },
+    "sqlImageOffer": {
+      "type": "string",
+      "defaultValue": "SQL2012SP2-WS2012R2",
+      "metadata": {
+        "description": "The image offer of the SQL Server for each SQL node."
+      },
+      "allowedValues": [
+        "SQL2008R2SP3-WS2008R2SP1",
+        "SQL2012SP2-WS2012",
+        "SQL2012SP2-WS2012R2",
+        "SQL2014-WS2012R2",
+        "SQL2014SP1-WS2012R2"
+      ]
+    },
+    "sqlImageSKU": {
+      "type": "string",
+      "defaultValue": "Enterprise",
+      "metadata": {
+        "description": "The SKU of th SQL Server image for each SQL node."
+      },
+      "allowedValues": [
+        "Enterprise",
+        "Enterprise-Optimized-for-DW",
+        "Enterprise-Optimized-for-OLTP",
+        "Standard",
+        "Web"
+      ]
+    },
+    "sqlSAName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage Account prefix name for both SQL nodes"
+      }
+    },
+    "witVmName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name for witness VM"
+      }
+    },
+    "witVmIPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "VM static private IP address for the Witness VM"
+      }
+    },
+    "witPublicDNSName": {
+      "type": "string",
+      "metadata": {
+        "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    },
+    "witSAName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage Account name for witness VM"
+      }
+    },
+
+    "dcVmName": {
+      "type": "string",
+      "metadata": {
+        "description": "VM prefix name for both SQL nodes"
+      }
+    },
+    "dcVm1IPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "VM static private IP address for SQL Node 1"
+      }
+    },
+    "dcVm2IPAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "VM static private IP address for SQL Node 2"
+      }
+    },
+    "dcPublicDNSName": {
+      "type": "string",
+      "metadata": {
+        "description": "Prefix for unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    },
+    "dcAvailabilitySetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Availability Set Name for both SQL nodes"
+      }
+    },
+    "dcSAName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage Account prefix name for both SQL nodes"
+      }
+    },
+    "existingRGName": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing Resource Group Name for the Vnet in which to place all resources."
+      }
+    },
+    "vnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "VNet Name in which to deploy all resources"
+      }
+    },
+    "addressPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "IP address prefix of the VNet in CIDR notation."
+      }
+    },
+    "sqlSubnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Subnet Name for SQL nodes and Witness VM"
+      }
+    },
+    "sqlSubnetPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "IP address prefix of the SQL nodes and Witness subnet in CIDR notation."
+      }
+    },
+    "miscSubnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Subnet Name for DC servers and for ILB"
+      }
+    },
+    "miscSubnetPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "IP address prefix for DC servers and for ILB"
+      }
+    }
+  },
+
+  "variables": {
+    "LBFrontEnd": "LBFE",
+    "LBBackEnd": "LBBE",
+    "sqlSubnetRef": "[concat(variables('vnetID'),'/subnets/', parameters('sqlSubnetName'))]",
+    "miscSubnetRef": "[concat(variables('vnetID'),'/subnets/', parameters('miscSubnetName'))]",
+    "vnetID": "[resourceId(parameters('existingRGName'),'Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+    "publicIPAddressType": "Dynamic",
+
+    "sqlPublicIPName": "sqlIP",
+    "sqlVmNicName": "sqlNIC",
+    "sqlImagePublisher": "MicrosoftSQLServer",
+    "sqlvmSize": "Standard_D2",
+    "sqlAOListener": "SQLAlwaysOnEndPointListener",
+    "sqlILBID": "[resourceId('Microsoft.Network/loadBalancers',parameters('sqlILBName'))]",
+    "sqlAOProbe": "SQLAlwaysOnEndPointProbe",
+    "sqlILBProbeID": "[concat(variables('sqlILBID'),'/probes/',variables('sqlAOProbe'))]",
+    "sqlILBFrontEndConfigID": "[concat(variables('sqlILBID'),'/frontendIPConfigurations/',variables('LBFrontEnd'))]",
+    "sqlILBBackEndAddressPoolID": "[concat(variables('sqlILBID'),'/backendAddressPools/',variables('LBBackEnd'))]",
+    "sqlSAType": "Standard_LRS",
+
+    "witPublicIPName": "witIP",
+    "witVmNicName": "witNIC",
+    "witImageOffer": "WindowsServer",
+    "witImagePublisher": "MicrosoftWindowsServer",
+    "witImageSKU": "2012-R2-Datacenter",
+    "witVmSize": "Basic_A2",
+    "witSAType": "Standard_LRS",
+
+    "dcPublicIPName": "dcIP",
+    "dcVmNicName": "dcNIC",
+    "dcImageOffer": "WindowsServer",
+    "dcImagePublisher": "MicrosoftWindowsServer",
+    "dcImageSKU": "2012-R2-Datacenter",
+    "dcVmSize": "Basic_A2",
+    "dcSAType": "Standard_LRS"
+
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[concat(parameters('sqlSAName'), copyindex(1))]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[concat(parameters('sqlSAName'), copyindex(1))]"
+      },
+      "copy": {
+        "name": "storageAccountLoop",
+        "count": 2
+      },
+      "properties": {
+        "accountType": "[variables('sqlSAType')]"
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[parameters('witSAName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('witSAName')]"
+      },
+      "properties": {
+        "accountType": "[variables('witSAType')]"
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[concat(parameters('dcSAName'), copyindex(1))]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[concat(parameters('dcSAName'), copyindex(1))]"
+      },
+      "copy": {
+        "name": "storageAccountLoop",
+        "count": 2
+      },
+      "properties": {
+        "accountType": "[variables('dcSAType')]"
+      }
+    },
+
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[parameters('vnetName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('addressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[parameters('sqlSubnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('sqlSubnetPrefix')]"
+            }
+          },
+          {
+            "name": "[parameters('miscSubnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('miscSubnetPrefix')]"
+            }
+          }
+        ]
+      }
+    },
+
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(variables('sqlPublicIPName'), copyindex(1))]",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "IPAddressLoop",
+        "count": 2
+      },
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(parameters('sqlPublicDNSName'),copyindex(1))]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('witPublicIPName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('witPublicDNSName')]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(variables('dcPublicIPName'), copyindex(1))]",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "IPAddressLoop",
+        "count": 2
+      },
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(parameters('dcPublicDNSName'), copyindex(1))]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/availabilitySets",
+      "name": "[parameters('sqlAvailabilitySetName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('sqlAvailabilitySetName')]"
+      },
+      "properties": {
+        "platformFaultDomainCount": 2,
+        "platformUpdateDomainCount": 2
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/availabilitySets",
+      "name": "[parameters('dcAvailabilitySetName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('dcAvailabilitySetName')]"
+      },
+      "properties": {
+        "platformFaultDomainCount": 2,
+        "platformUpdateDomainCount": 2
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "name": "[parameters('sqlILBName')]",
+      "type": "Microsoft.Network/loadBalancers",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('vnetName'))]"
+      ],
+      "tags": {
+        "displayName": "[parameters('sqlILBName')]"
+      },
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "[variables('LBFrontEnd')]",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "[parameters('sqlILBIPAddress')]",
+              "subnet": {
+                "id": "[variables('miscSubnetRef')]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "[variables('LBBackEnd')]"
+          }
+        ],
+        "loadBalancingRules": [
+          {
+            "name": "[variables('sqlAOListener')]",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('sqlILBFrontEndConfigID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('sqlILBBackEndAddressPoolID')]"
+              },
+              "probe": {
+                "id": "[variables('sqlILBProbeID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 1433,
+              "backendPort": 1433,
+              "enableFloatingIP": true
+            }
+          }
+        ],
+        "probes": [
+          {
+            "name": "[variables('sqlAOProbe')]",
+            "properties": {
+              "protocol": "tcp",
+              "port": 59999,
+              "intervalInSeconds": 5,
+              "numberOfProbes": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('sqlVmNicName'), '1')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', concat(variables('sqlPublicIPName'), 1))]",
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('vnetName'))]",
+        "[concat('Microsoft.Network/loadBalancers/', parameters('sqlILBName'))]"
+      ],
+      "tags": {
+        "displayName": "[concat(variables('sqlVmNicName'), '1')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('sqlVm1IPAddress')]",
+              "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',concat(variables('sqlPublicIPName'), 1))]"
+              },
+              "subnet": {
+                "id": "[variables('sqlSubnetRef')]"
+              },
+              "loadBalancerBackendAddressPools": [
+                {
+                  "id": "[variables('sqlILBBackEndAddressPoolID')]"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('sqlVmNicName'), '2')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', concat(variables('sqlPublicIPName'), 2))]",
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('vnetName'))]",
+        "[concat('Microsoft.Network/loadBalancers/', parameters('sqlILBName'))]"
+      ],
+      "tags": {
+        "displayName": "[concat(variables('sqlVmNicName'), '2')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('sqlVm2IPAddress')]",
+              "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',concat(variables('sqlPublicIPName'), 2))]"
+              },
+              "subnet": {
+                "id": "[variables('sqlSubnetRef')]"
+              },
+              "loadBalancerBackendAddressPools": [
+                {
+                  "id": "[variables('sqlILBBackEndAddressPoolID')]"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "name": "[variables('witVmNicName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('witPublicIPName'))]",
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('vnetName'))]"
+      ],
+      "tags": {
+        "displayName": "[variables('witVmNicName')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('witVmIPAddress')]",
+              "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('witPublicIPName'))]"
+              },
+              "subnet": {
+                "id": "[variables('sqlSubnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "name": "[concat(variables('dcVmNicName'), '1')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', concat(variables('dcPublicIPName'), 1))]",
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('vnetName'))]"
+      ],
+      "tags": {
+        "displayName": "[concat(variables('dcVmNicName'), '1')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('dcVm1IPAddress')]",
+              "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',concat(variables('dcPublicIPName'), 1))]"
+              },
+              "subnet": {
+                "id": "[variables('miscSubnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "name": "[concat(variables('dcVmNicName'), '2')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', concat(variables('dcPublicIPName'), 2))]",
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('vnetName'))]"
+      ],
+      "tags": {
+        "displayName": "[concat(variables('dcVmNicName'), '2')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('dcVm2IPAddress')]",
+              "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',concat(variables('dcPublicIPName'), 2))]"
+              },
+              "subnet": {
+                "id": "[variables('miscSubnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[concat(parameters('sqlVMName'), copyindex(1))]",
+      "copy": {
+        "name": "virtualMachineLoop",
+        "count": 2
+      },
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[concat(parameters('sqlVMName'), copyindex(1))]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', parameters('sqlSAName'), copyindex(1))]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('sqlVmNicName'), copyindex(1))]",
+        "[concat('Microsoft.Compute/availabilitySets/', parameters('sqlAvailabilitySetName'))]"
+      ],
+      "properties": {
+        "availabilitySet": {
+          "id": "[resourceId('Microsoft.Compute/availabilitySets',parameters('sqlAvailabilitySetName'))]"
+        },
+        "hardwareProfile": {
+          "vmSize": "[variables('sqlVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[concat(parameters('sqlVMName'), copyindex(1))]",
+          "adminUsername": "[parameters('vmAdminUsername')]",
+          "adminPassword": "[parameters('vmAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('sqlImagePublisher')]",
+            "offer": "[parameters('sqlImageOffer')]",
+            "sku": "[parameters('sqlImageSKU')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "OSDisk",
+            "vhd": {
+              "uri": "[concat('http://',parameters('sqlSAName'), copyindex(1),'.blob.core.windows.net/vhds/','OSDisk', copyindex(1), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(variables('sqlVmNicName'),copyindex(1)))]"
+            }
+          ]
+        }
+      }
+    },
+
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[parameters('witVMName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[parameters('witVMName')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', parameters('witSAName'))]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('witVmNicName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('witVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('witVMName')]",
+          "adminUsername": "[parameters('vmAdminUsername')]",
+          "adminPassword": "[parameters('vmAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('witImagePublisher')]",
+            "offer": "[variables('witImageOffer')]",
+            "sku": "[variables('witImageSKU')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "OSDisk",
+            "vhd": {
+              "uri": "[concat('http://',parameters('witSAName'),'.blob.core.windows.net/vhds/','OSDisk','.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(variables('witVmNicName')))]"
+
+            }
+          ]
+        }
+      }
+    },
+
+    // DC servers
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[concat(parameters('dcVMName'), copyindex(1))]",
+      "copy": {
+        "name": "virtualMachineLoop",
+        "count": 2
+      },
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[concat(parameters('dcVMName'), copyindex(1))]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', parameters('dcSAName'),copyindex(1))]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('dcVmNicName'),copyindex(1))]",
+        "[concat('Microsoft.Compute/availabilitySets/', parameters('dcAvailabilitySetName'))]"
+      ],
+      "properties": {
+        "availabilitySet": {
+          "id": "[resourceId('Microsoft.Compute/availabilitySets',parameters('dcAvailabilitySetName'))]"
+        },
+        "hardwareProfile": {
+          "vmSize": "[variables('dcVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[concat(parameters('dcVMName'), copyindex(1))]",
+          "adminUsername": "[parameters('vmAdminUsername')]",
+          "adminPassword": "[parameters('vmAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('dcImagePublisher')]",
+            "offer": "[variables('dcImageOffer')]",
+            "sku": "[variables('dcImageSKU')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "OSDisk",
+            "vhd": {
+              "uri": "[concat('http://',parameters('dcSAName'),copyindex(1),'.blob.core.windows.net/vhds/','OSDisk','.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(variables('dcVmNicName'),copyindex(1)))]"
+
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
