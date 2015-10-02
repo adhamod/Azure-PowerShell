@@ -3,9 +3,9 @@ This script uses an ARM Template to deploy the following resources:
     + 5 Storage Accounts: 
       - 1 for each SQL Server VM
       - 1 for each Domain Controller (DC) server VM
-      - 1 for the witness VM 
+      - 1 for the witness VM (a.k.a. the extra WSFC Node VM)
     + 1 VNet with:
-      - 1 Subnet for SQL Server and Witness VMs
+      - 1 Subnet for SQL Server VMs and Witness VM
       - 1 Subnet for the ILB and the DC Server VMs
     + 2 Availability Sets
       - 1 for the SQL Server VM
@@ -16,7 +16,7 @@ This script uses an ARM Template to deploy the following resources:
     + 5 NICs: 1 for each VM
     + 5 VMs:
       - 2 SQL Server running on Windows Server
-      - 1 witness VM running on Windows Server
+      - 1 witness VM (a.k.a. the extra WSFC Node VM) running on Windows Server
       - 2 DC servers running on Windows `
 
     Prerequisites:
