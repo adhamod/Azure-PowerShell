@@ -6,6 +6,7 @@
     + 1 Availability Set for the SQL Nodes
     + 1 Internal Load Balancer for the SQL nodes
     + 3 NICs: 1 for each SQL nodes and 1 for the witness VM
+    + 3 public IP addresses: 1 for each VM
     + 3 VMs: 1 for each SQL node and 1 for the witness
 
 ************************************************************************************************/
@@ -42,6 +43,12 @@
       "type": "string",
       "metadata": {
         "description": "VM static private IP address for SQL Node 2"
+      }
+    },
+    "sqlPublicDNSName": {
+      "type": "string",
+      "metadata": {
+        "description": "Prefix for unique DNS Name for the Public IP used to access the Virtual Machine."
       }
     },
     "sqlVmNicName": {
@@ -129,6 +136,12 @@
         "description": "VM static private IP address for the Witness VM"
       }
     },
+    "witPublicDNSName": {
+      "type": "string",
+      "metadata": {
+        "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    },
     "witVmNicName": {
       "type": "string",
       "metadata": {
@@ -177,30 +190,27 @@
   },
 
   "variables": {
-    /* Notes:
-      The Load Balancer Front End and Back End variables are necessary for the 
-      Internal Load Balancer configuration. AFAIK, it does nothing other than name the
-      front end and back end of the Internal Load Balancer (i.e. no front end subnet address or
-      back end subnet address is specified).
-      */
     "LBFrontEnd": "LBFE",
     "LBBackEnd": "LBBE",
     "subnetRef": "[concat(variables('vnetID'),'/subnets/', parameters('subnetName'))]",
     "vnetID": "[resourceId(parameters('existingRGName'),'Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+    "publicIPAddressType": "Dynamic",
 
-    "sqlImagePublisher": "MicrosoftSQLServer", // Publisher name is not just Microsoft
-    "sqlvmSize": "Standard_D4", // TODO: make this customizable
+    "sqlImagePublisher": "MicrosoftSQLServer",
+    "sqlvmSize": "Standard_D4", // EDIT this to change VM size for SQL Server nodes
     "sqlAOListener": "SQLAlwaysOnEndPointListener",
     "sqlILBID": "[resourceId('Microsoft.Network/loadBalancers',parameters('sqlILBName'))]",
     "sqlAOProbe": "SQLAlwaysOnEndPointProbe",
     "sqlILBProbeID": "[concat(variables('sqlILBID'),'/probes/',variables('sqlAOProbe'))]",
     "sqlILBFrontEndConfigID": "[concat(variables('sqlILBID'),'/frontendIPConfigurations/',variables('LBFrontEnd'))]",
     "sqlILBBackEndAddressPoolID": "[concat(variables('sqlILBID'),'/backendAddressPools/',variables('LBBackEnd'))]",
+    "sqlPublicIPName": "SQL_Public_IP_",
 
     "witImageOffer": "WindowsServer",
     "witImagePublisher": "MicrosoftWindowsServer",
     "witImageSKU": "2012-R2-Datacenter",
-    "witVmSize": "Basic_A2" // TODO: make this customizable
+    "witVmSize": "Basic_A2", // EDIT this to change VM size for
+    "witPublicIPName": "wit_Public_IP"
 
   },
   "resources": [
@@ -230,6 +240,35 @@
       },
       "properties": {
         "accountType": "[parameters('witSAType')]"
+      }
+    },
+    //added
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(variables('sqlPublicIPName'), copyindex(1))]",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "IPAddressLoop",
+        "count": 2
+      },
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(parameters('sqlPublicDNSName'),copyindex(1))]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('witPublicIPName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('witPublicDNSName')]"
+        }
       }
     },
     {
@@ -313,7 +352,8 @@
         "displayName": "[concat(parameters('sqlVmNicName'), '1')]"
       },
       "dependsOn": [
-        "[concat('Microsoft.Network/loadBalancers/', parameters('sqlILBName'))]"
+        "[concat('Microsoft.Network/loadBalancers/', parameters('sqlILBName'))]",
+        "[concat('Microsoft.Network/publicIPAddresses/', concat(variables('sqlPublicIPName'), 1))]"
       ],
       "properties": {
         "ipConfigurations": [
@@ -322,6 +362,9 @@
             "properties": {
               "privateIPAddress": "[parameters('sqlVm1IPAddress')]",
               "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',concat(variables('sqlPublicIPName'), 1))]"
+              },
               "subnet": {
                 "id": "[variables('subnetRef')]"
               },
@@ -344,7 +387,8 @@
         "displayName": "[concat(parameters('sqlVmNicName'), '2')]"
       },
       "dependsOn": [
-        "[concat('Microsoft.Network/loadBalancers/', parameters('sqlILBName'))]"
+        "[concat('Microsoft.Network/loadBalancers/', parameters('sqlILBName'))]",
+        "[concat('Microsoft.Network/publicIPAddresses/', concat(variables('sqlPublicIPName'), 2))]"
       ],
       "properties": {
         "ipConfigurations": [
@@ -353,6 +397,9 @@
             "properties": {
               "privateIPAddress": "[parameters('sqlVm2IPAddress')]",
               "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',concat(variables('sqlPublicIPName'), 2))]"
+              },
               "subnet": {
                 "id": "[variables('subnetRef')]"
               },
@@ -374,6 +421,9 @@
       "tags": {
         "displayName": "[parameters('witVmNicName')]"
       },
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('witPublicIPName'))]"
+      ],
       "properties": {
         "ipConfigurations": [
           {
@@ -381,6 +431,9 @@
             "properties": {
               "privateIPAddress": "[parameters('witVmIPAddress')]",
               "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('witPublicIPName'))]"
+              },
               "subnet": {
                 "id": "[variables('subnetRef')]"
               }

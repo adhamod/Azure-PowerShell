@@ -6,6 +6,7 @@ This script uses an ARM Template to deploy the following resources:
     + 1 Availability Set for the SQL Nodes
     + 1 Internal Load Balancer for the SQL nodes
     + 3 NICs: 1 for each SQL nodes and 1 for the witness VM
+    + 3 public IP addresses: 1 for each VM
     + 3 VMs: 1 for each SQL node and 1 for the witness
 
     Prerequisites:
@@ -42,10 +43,13 @@ $vmAdminUsername = "charliebrown"
 $sqlVmName = "testNode"
 
 # VM static private IP address for SQL Node 1
-$sqlVm1IPAddress = "10.255.255.4"
+$sqlVm1IPAddress = "10.1.0.4"
 
 # VM static private IP address for SQL Node 2
-$sqlVm2IPAddress = "10.255.255.5"
+$sqlVm2IPAddress = "10.1.0.5"
+
+# Prefix for unique DNS Name for the Public IP used to access the Virtual Machine.
+$sqlPublicDNSName = "kennametaltestsql"
 
 # VM prefix name for both SQL nodes' NICs
 $sqlVmNicName = "testSQLNic"
@@ -54,7 +58,7 @@ $sqlVmNicName = "testSQLNic"
 $sqlILBName = "testILB"
 
 # Internal Load Balancer private IP Address for both SQL nodes
-$sqlILBIPAddress = "10.255.255.6"
+$sqlILBIPAddress = "10.1.0.6"
 
 # Availability Set Name for both SQL nodes
 $sqlAvailabilitySetName = "testAvailabilitySet"
@@ -66,7 +70,7 @@ $sqlImageOffer = "SQL2012SP2-WS2012R2"
 $sqlImageSKU = "Enterprise"
 
 # Storage Account prefix name for both SQL nodes (no upper case letters allowed)
-$sqlSAName = "testsqlstor12345"
+$sqlSAName = "testsqlstorkenn"
 
 #Type of storage account for the SQL Server VM disks
 $sqlSAType = "Standard_GRS"
@@ -77,13 +81,16 @@ $sqlSAType = "Standard_GRS"
 $witVmName = "testWitness"
 
 #VM static private IP address for the Witness VM
-$witVmIPAddress = "10.255.255.7"
+$witVmIPAddress = "10.1.0.7"
+
+#Unique DNS Name for the Public IP used to access the Virtual Machine
+$witPublicDNSName = "kennametaltestwit"
 
 #NIC name for witness VM
 $witVmNicName = "testWitnessNic"
 
 #Storage Account name for witness VM
-$witSAName = "testwitstor12345"
+$witSAName = "testwitstorkenn"
 
 #Type of storage account for the Witness VM disk
 $witSAType = "Standard_GRS"
@@ -91,13 +98,13 @@ $witSAType = "Standard_GRS"
 ### Networks
 
 #Existing Resource Group Name for the Vnet to place SQL nodes and witness VM
-$existingRGName = "sqlAlwaysOnRG"
+$existingRGName = "sqlTest2"
 
 #Existing Subnet Name for SQL nodes and Witness VM
-$subnetName = "testSubnetName"
+$subnetName = "default"
 
 #Existing VNet Name for the subnet of SQL nodes and witness VM
-$vnetName = "sqlServerTestVnet"
+$vnetName = "testVnet"
 
 
 ##################################
@@ -115,6 +122,7 @@ New-AzureResourceGroupDeployment `
     -sqlVmName $sqlVmName `
     -sqlVm1IPAddress $sqlVm1IPAddress `
     -sqlVm2IPAddress $sqlVm2IPAddress `
+    -sqlPublicDNSName $sqlPublicDNSName `
     -sqlVmNicName $sqlVmNicName `
     -sqlILBName $sqlILBName `
     -sqlILBIPAddress $sqlILBIPAddress `
@@ -125,6 +133,7 @@ New-AzureResourceGroupDeployment `
     -sqlSAType $sqlSAType `
     -witVmName $witVmName `
     -witVmIPAddress $witVmIPAddress `
+    -witPublicDNSName $witPublicDNSName `
     -witVmNicName $witVmNicName `
     -witSAName $witSAName `
     -witSAType $witSAType `
