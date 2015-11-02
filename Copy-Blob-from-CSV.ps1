@@ -37,14 +37,6 @@ $destContainerName = "testdestinationcontainer"
 # END OF REQUIRED USER INPUT
 ##################################
 
-<#
-# Container name in which the SOURCE file is located (container must be inside SOURCE storage account)
-$srcContainerName = "testContainer"
-
-# Blob name of the SOURCE file (must be located inside SOURCE container)
-$srcBlobName = "testBlob.vhd"
-#>
-
 # Make context for SOURCE storage account
 $srcContext = New-AzureStorageContext -ConnectionString $srcConnectionString
 # Make context for DESTINATION storage account
