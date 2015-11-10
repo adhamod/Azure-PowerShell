@@ -11,6 +11,12 @@ in the following format:
 
 The name of the DESTINATION container must be specified under user input.
 
+This script has been tested to function correctly in both ASM and ARM.
+
+This script has been tested to function correctly in Azure PowerShell version 1.0.1
+
+This script also works when the source VHD file has a lease (i.e. the VHD file is being used for an Azure disk).
+
 Author: Carlos Patiño, carpat@microsoft.com
 #>
 
