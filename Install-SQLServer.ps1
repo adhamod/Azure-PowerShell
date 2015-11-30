@@ -4,7 +4,7 @@
 	Install-SQLServer.
 	
 .SYNOPSIS 
-    InstallS SQL Server 2012 on a Windows Server 2012 R2 host machine.
+    InstallS SQL Server 2012 or 2014 on a Windows Server 2012 R2 host machine.
 
 .DESCRIPTION
 	
@@ -73,12 +73,13 @@ New-StoragePool -FriendlyName DataDiskStoragePool `
     -StorageSubsystemFriendlyName "Storage Spaces*" `
     -PhysicalDisks $PhysicalDisks `
     -ResiliencySettingNameDefault Simple `
-    -ProvisioningTypeDefault Fixed 
+    -ProvisioningTypeDefault Fixed `
+    -ErrorAction Stop
 
 # Create new virtual disk, then Initialize it, then make a new partition on the F drive.
 New-VirtualDisk -StoragePoolFriendlyName DataDiskStoragePool -FriendlyName "VirtualDataDisk" `
             -UseMaximumSize -ProvisioningType Fixed | Initialize-Disk  -PassThru | New-Partition -DriveLetter 'F' -UseMaximumSize `
-            | Format-Volume -AllocationUnitSize 65536 -FileSystem NTFS -Confirm:$false -Force
+            | Format-Volume -AllocationUnitSize 65536 -FileSystem NTFS -Confirm:$false -Force -ErrorAction Stop
 
 
 
@@ -100,10 +101,10 @@ Install-WindowsFeature -Name Net-Framework-Core # -source \\network\share\sxs
 ########################################
 
 # Create new directories
-New-Item -ItemType directory -Path F:\SQL_Data
-New-Item -ItemType directory -Path F:\SQL_Backup
-New-Item -ItemType directory -Path F:\SQL_Logs
-New-Item -ItemType directory -Path F:\SQL_TempDB
+New-Item -ItemType directory -Path F:\SQL_Data | Out-Null
+New-Item -ItemType directory -Path F:\SQL_Backup | Out-Null
+New-Item -ItemType directory -Path F:\SQL_Logs | Out-Null
+New-Item -ItemType directory -Path F:\SQL_TempDB | Out-Null
 
 # Open up firewall ports
 # For Database Engine default instance
