@@ -30,6 +30,10 @@
 .NOTES
     AUTHOR: Carlos Patiño
     LASTEDIT: November 30, 2015
+
+# Improvement possibilites: using Custom Script Extension
+# http://www.powershellmagazine.com/2014/04/30/understanding-azure-custom-script-extension/
+
 #>
 
 param (
@@ -49,7 +53,7 @@ param (
 # Initialize variables
 ########################################
 $ServerName = $env:COMPUTERNAME # Name of the local computer.
-$LocalAdmin = $env:USERNAME # Name of the current user (which in our particular case is always going to be the local administrator)
+$LocalAdmin = "TestAdmin" # Name of the current user (which in our particular case is always going to be the local administrator)
 
 
 
