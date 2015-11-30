@@ -18,12 +18,6 @@
         - Move the tempdb database to the F: drive.
         - Move the default locations for the Data, Backup, and Log databases to the F: drive.
 
-.PARAMETER ServerName
-	Name of the local computer.
-
-.PARAMETER LocalAdmin
-	Name of the local administrator.
-
 .PARAMETER DotNet35SourcePath
 	Path of the .NET 3.5 installation files (i.e. the \sources\sxs folder)
 
@@ -35,18 +29,10 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: November 28, 2015
+    LASTEDIT: November 30, 2015
 #>
 
 param (
-    [ValidateNotNullOrEmpty()]
-    [String]
-    $ServerName="testVMCarlos1",
-
-    [ValidateNotNullOrEmpty()]
-    [String]
-    $LocalAdmin="charliebrown",
-
     [Parameter(Mandatory=$false)]
     [ValidateNotNullOrEmpty()]
     [String]
@@ -57,6 +43,13 @@ param (
     $sqlInstallationPath = "C:\Users\charliebrown\Downloads\SQLFULL_x64_ENU\Setup.exe"
 
     )
+
+
+########################################
+# Initialize variables
+########################################
+$ServerName = $env:COMPUTERNAME # Name of the local computer.
+$LocalAdmin = $env:USERNAME # Name of the current user (which in our particular case is always going to be the local administrator)
 
 
 
@@ -91,6 +84,9 @@ New-VirtualDisk -StoragePoolFriendlyName DataDiskStoragePool -FriendlyName "Virt
 ########################################
 
 Install-WindowsFeature -Name Net-Framework-Core # -source \\network\share\sxs
+
+# Areas for improvement: reference this article:
+# http://stackoverflow.com/questions/303045/connecting-to-a-network-folder-with-username-password-in-powershell
 
 
 
