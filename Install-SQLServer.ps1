@@ -14,7 +14,7 @@
             with an allocation unit size of 64KB (i.e. 65,536 bytes)
         - Install .NET Framework 3.5 from a source file.
         - Open ports 1433 (for the SQL Server Engine) and port 2383 (for Analysis Services) on the firewall.
-        - Install SQL Server 2012 from a source file.
+        - Install SQL Server from a source file.
         - Move the tempdb database to the F: drive.
         - Move the default locations for the Data, Backup, and Log databases to the F: drive.
 
@@ -40,11 +40,11 @@ param (
     [Parameter(Mandatory=$false)]
     [ValidateNotNullOrEmpty()]
     [String]
-    $DotNet35SourcePath,
+    $DotNet35SourcePath = "C:\Users\TestAdmin\Downloads\dotnet35source\sxs",
 
     [ValidateNotNullOrEmpty()]
     [String]
-    $sqlInstallationPath = "C:\Users\charliebrown\Downloads\SQLFULL_x64_ENU\Setup.exe"
+    $sqlInstallationPath = "C:\Users\TestAdmin\Downloads\SQLServer2014\Setup.exe"
 
     )
 
@@ -88,7 +88,7 @@ New-VirtualDisk -StoragePoolFriendlyName DataDiskStoragePool -FriendlyName "Virt
 # Install .NET Framework 3.5
 ########################################
 
-Install-WindowsFeature -Name Net-Framework-Core # -source \\network\share\sxs
+Install-WindowsFeature -Name Net-Framework-Core -source $DotNet35SourcePath -ErrorAction Stop
 
 # Areas for improvement: reference this article:
 # http://stackoverflow.com/questions/303045/connecting-to-a-network-folder-with-username-password-in-powershell
@@ -147,7 +147,7 @@ $myArgList += '/SAPWD=W3lc0me0 '
 $myArgList += '/TCPENABLED=1'                                      # Enable TCP/IP Protocol
 
 # Start the installation process with the specified parameters.
-Start-Process -Verb runas -FilePath $sqlInstallationPath -ArgumentList $myArgList -Wait
+Start-Process -Verb runas -FilePath $sqlInstallationPath -ArgumentList $myArgList -Wait -ErrorAction Stop
 
 
 
