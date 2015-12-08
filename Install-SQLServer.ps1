@@ -35,7 +35,7 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: November 30, 2015
+    LASTEDIT: November 7 Dec 2015
 
 # Improvement possibilites: using Custom Script Extension
 # http://www.powershellmagazine.com/2014/04/30/understanding-azure-custom-script-extension/
@@ -46,11 +46,11 @@ param (
     [Parameter(Mandatory=$false)]
     [ValidateNotNullOrEmpty()]
     [String]
-    $DotNet35SourcePath = "C:\Users\charliebrown\Downloads\dotnet35source\sxs",
+    $DotNet35SourcePath = "C:\Users\TestAdmin\Downloads\dotnet35source\sxs",
 
     [ValidateNotNullOrEmpty()]
     [String]
-    $sqlInstallationPath = "C:\Users\charliebrown\Downloads\SQLServer2014\Setup.exe",
+    $sqlInstallationPath = "C:\Users\TestAdmin\Downloads\SQLServer2014\Setup.exe",
 
     [ValidateNotNullOrEmpty()]
     [int]
