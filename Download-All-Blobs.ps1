@@ -7,10 +7,13 @@
 #### USER INPUITS
 $container_name = 'packageitems'
 $destination_path = 'C:\pstest'
-$connection_string = 'DefaultEndpointsProtocol=https;AccountName=[REPLACEWITHACCOUNTNAME];AccountKey=[REPLACEWITHACCOUNTKEY]'
+$accountname = 'add account name here'
+$accountkey = 'add account key here'
 
 
 #### MAIN FUNCTION
+
+$connection_string = "DefaultEndpointsProtocol=https;AccountName=$accountname;AccountKey=$accountkey"
 
 $storage_account = New-AzureStorageContext -ConnectionString $connection_string
 
