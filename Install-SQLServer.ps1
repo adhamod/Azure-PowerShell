@@ -19,7 +19,7 @@
         - Move the default locations for the Data, Backup, and Log databases to the F: drive.
 
 .PARAMETER DotNet35SourcePath
-	Path of the .NET 3.5 installation files (i.e. the \sources\sxs folder)
+	Path of the .NET 3.5 installation folder (i.e. the \sources\sxs folder)
 
 .PARAMETER sqlInstallationPath
 	Path of the SQL Server installation file (i.e. Setup.exe)
@@ -30,15 +30,15 @@
 .PARAMETER percentAutogrowTempDB
 	The file growth of the TempDB data files, as a percentage.
 
+.PARAMETER LocalAdmin
+	Name of the Local Administrator of the machine in which this script will run.
+
 .EXAMPLE
-    Install-SQLServer -ServerName testVM1 -LocalAdmin charliebrown -DotNet35SourcePath C:\Downloads\sources\sxs -sqlInstallationPath "C:\Downloads\SQLFULL_x64_ENU\Setup.exe"
+    Install-SQLServer -DotNet35SourcePath C:\Downloads\sources\sxs -sqlInstallationPath "C:\Downloads\SQLFULL_x64_ENU\Setup.exe" -sizeTempDBDataFileMB 256 -percentAutogrowTempDB 10
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: November 7 Dec 2015
-
-# Improvement possibilites: using Custom Script Extension
-# http://www.powershellmagazine.com/2014/04/30/understanding-azure-custom-script-extension/
+    LASTEDIT: November 15 Dec 2015
 
 #>
 
@@ -46,11 +46,11 @@ param (
     [Parameter(Mandatory=$false)]
     [ValidateNotNullOrEmpty()]
     [String]
-    $DotNet35SourcePath = "C:\Users\TestAdmin\Downloads\dotnet35source\sxs",
+    $DotNet35SourcePath = "\\ps11170644tou02.cloud.wal-mart.com\Source\dotnet35source\sxs\",
 
     [ValidateNotNullOrEmpty()]
     [String]
-    $sqlInstallationPath = "C:\Users\TestAdmin\Downloads\SQLServer2014\Setup.exe",
+    $sqlInstallationPath = "\\ps11170644tou02.cloud.wal-mart.com\Source\SQLServer2012\Setup.exe",
 
     [ValidateNotNullOrEmpty()]
     [int]
@@ -58,7 +58,11 @@ param (
 
     [ValidateNotNullOrEmpty()]
     [int]
-    $percentAutogrowTempDB = 10
+    $percentAutogrowTempDB = 10,
+
+    [ValidateNotNullOrEmpty()]
+    [string]
+    $LocalAdmin = "AzrRootAdminUser"
 
     )
 
@@ -67,7 +71,6 @@ param (
 # Initialize variables
 ########################################
 $ServerName = $env:COMPUTERNAME # Name of the local computer.
-$LocalAdmin = "TestAdmin" # Name of the current user (which in our particular case is always going to be the local administrator)
 
 # It appears that Try/Catch/Finally and Trap in PowerShell only works with terminating errors.
 # Make all errors terminating
@@ -164,25 +167,9 @@ Install-WindowsFeature -Name Net-Framework-Core -source $DotNet35SourcePath | Ou
 
 Write-Host ".NET Framework 3.5 successfully installed."
 
-# Areas for improvement: reference this article:
-# http://stackoverflow.com/questions/303045/connecting-to-a-network-folder-with-username-password-in-powershell
-
-
 ########################################
 # Install and configure SQL Server
 ########################################
-
-# Create new directories
-New-Item -ItemType directory -Path F:\SQL_Data     | Out-Null
-New-Item -ItemType directory -Path F:\SQL_Backup   | Out-Null
-New-Item -ItemType directory -Path F:\SQL_Logs     | Out-Null
-New-Item -ItemType directory -Path F:\SQL_TempDB   | Out-Null
-
-# Open up firewall ports
-# For Database Engine default instance
-netsh advfirewall firewall add rule name="SQL Instances" dir=in action=allow protocol=TCP localport=1433
-# For Analysis Services
-netsh advfirewall firewall add rule name="SQL Analysis Services" dir=in action=allow protocol=TCP localport=2383
 
 # Specify installation parameters
 $myArgList =  '/QS '                                               # Only shows progress, does not accept any user input
@@ -227,6 +214,21 @@ Write-Host "SQL Server successfully installed."
 ########################################
 # SQL Server Post-Installation
 ########################################
+
+
+# Create new directories if they do not already exist
+$pathsToCreate = @("F:\SQL_Data";"F:\SQL_Backup";"F:\SQL_Logs";"F:\SQL_TempDB")
+foreach ($path in $pathsToCreate) {
+    if (!(Test-Path $path)) {
+        New-Item -ItemType directory -Path $path | Out-Null
+    }
+}
+
+# Open up firewall ports
+# For Database Engine default instance
+netsh advfirewall firewall add rule name="SQL Instances" dir=in action=allow protocol=TCP localport=1433
+# For Analysis Services
+netsh advfirewall firewall add rule name="SQL Analysis Services" dir=in action=allow protocol=TCP localport=2383
 
 <#
     Create SQL Query to move the TEMPDB database from its default location to the F: drive
