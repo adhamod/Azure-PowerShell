@@ -127,18 +127,19 @@ else {
        friendly name for different computers).
     #>
     New-StoragePool -FriendlyName DataDiskStoragePool `
-        -StorageSubsystemFriendlyName "Storage Spaces*" `
-        -PhysicalDisks $PhysicalDisks `
-        -ResiliencySettingNameDefault Simple `
-        -ProvisioningTypeDefault Fixed | Out-Null
+                    -StorageSubsystemFriendlyName "Storage Spaces*" `
+                    -PhysicalDisks $PhysicalDisks `
+                    -ResiliencySettingNameDefault Simple `
+                    -ProvisioningTypeDefault Fixed | Out-Null
 
     # Stops the Hardware Detection Service to prevent the Format Disk prompt window from popping up
     Stop-Service -Name ShellHWDetection
 
     # Create new virtual disk, then Initialize it.
-    New-VirtualDisk -StoragePoolFriendlyName DataDiskStoragePool -FriendlyName "VirtualDataDisk" `
-            -UseMaximumSize -ProvisioningType Fixed `
-            | Initialize-Disk  -PassThru | Out-Null
+    New-VirtualDisk -StoragePoolFriendlyName DataDiskStoragePool `
+                    -FriendlyName "VirtualDataDisk" `
+                    -UseMaximumSize -ProvisioningType Fixed `
+                    | Initialize-Disk -PassThru | Out-Null
 
     # Get the virtual disk created
     # The C: and D: disks will have numbers 0 and 1. 
@@ -230,6 +231,7 @@ Install-WindowsFeature -Name Net-Framework-Core -source $DotNet35SourcePath | Ou
 
 Write-Host ".NET Framework 3.5 successfully installed."
 
+
 ########################################
 # Install and configure SQL Server
 ########################################
@@ -267,14 +269,13 @@ $myArgList += '/SQLUSERDBLOGDIR="I:\SQLLog" '                      # Specifies t
 $myArgList += '/ISSVCACCOUNT="NT AUTHORITY\NETWORK SERVICE" '      # Specifies the account for Integration Services.
 $myArgList += '/ISSVCPASSWORD=W3lc0me0 '                           # Specifies the Integration Services password.
 
-$myArgList += '/SQLSVCSTARTUPTYPE=Automatic '                      # Startup type for the SQL Server service
 $myArgList += '/SQLSVCACCOUNT="NT Service\MSSQLSERVER" '           # Account for SQL Server service
 $myArgList += '/SQLSVCPASSWORD=W3lc0me0 '                          # SQL Service Password
+$myArgList += '/SQLSVCSTARTUPTYPE=Automatic '                      # Startup type for the SQL Server service
 $myArgList += "/SQLSYSADMINACCOUNTS=$ServerName\$LocalAdmin "      # Windows account(s) to provision as SQL Server system administrators.
 
 $myArgList += '/SECURITYMODE=SQL '                                 # Use SQL for Mixed Mode authentication
 $myArgList += '/SAPWD=W3lc0me0 '                                   # Specifies the password for the SQL Serversa account.
-
 
 $myArgList += '/TCPENABLED=1'                                      # Enable TCP/IP Protocol
 
