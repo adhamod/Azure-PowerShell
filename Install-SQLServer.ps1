@@ -138,9 +138,13 @@ else {
     # Create new virtual disk, then Initialize it.
     New-VirtualDisk -StoragePoolFriendlyName DataDiskStoragePool -FriendlyName "VirtualDataDisk" `
             -UseMaximumSize -ProvisioningType Fixed `
-            | Initialize-Disk  -PassThru
+            | Initialize-Disk  -PassThru | Out-Null
 
-    $VirtualDisk = Get-Disk -FriendlyName "Microsoft Storage Space Device" | Out-Null
+    # Get the virtual disk created
+    # The C: and D: disks will have numbers 0 and 1. 
+    # Logic: if storage pool successfully created, any disk with a number greater or equal to 2
+    # must be the disk just created
+    $VirtualDisk = Get-Disk | Where-Object {$_.Number -ge 2}
 
     <#
         Make partitions on the disk according to SQL Server standard
