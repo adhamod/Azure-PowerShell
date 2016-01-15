@@ -30,13 +30,12 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: January 12 2016
+    LASTEDIT: January 15 2016
 
 #>
 
 param (
     [Parameter(Mandatory=$false)]
-    [ValidateNotNullOrEmpty()]
     [String]
     $DotNet35SourcePath = "\\ps11170644tou02.cloud.wal-mart.com\Source\dotnet35source\sxs\",
 
@@ -238,6 +237,19 @@ Write-Host ".NET Framework 3.5 successfully installed."
 # Using the following document as a reference for list of parameters:
 # https://msdn.microsoft.com/en-us/library/ms144259(v=sql.120).aspx
 
+<#
+ The following features are being installed:
+ - Database Engine
+    - Replication component of Database Engine
+    - Full Text component of Database Engine
+- Integration Services
+- Management Tools - Complete
+- Client Tools Backward Compatibility
+- Client Tools Connectivity 
+- SDK for SQL Server Native Client
+- Software development kit
+#>
+
 # Specify installation parameters
 $myArgList =  '/QS '                                               # Only shows progress, does not accept any user input
 $myArgList += '/ACTION=INSTALL '
@@ -273,6 +285,7 @@ $myArgList += '/SQLSVCACCOUNT="NT Service\MSSQLSERVER" '           # Account for
 $myArgList += '/SQLSVCPASSWORD=W3lc0me0 '                          # SQL Service Password
 $myArgList += '/SQLSVCSTARTUPTYPE=Automatic '                      # Startup type for the SQL Server service
 $myArgList += "/SQLSYSADMINACCOUNTS=$ServerName\$LocalAdmin "      # Windows account(s) to provision as SQL Server system administrators.
+$myArgList += 'HOMEOFFICE\CP-IaaS-Azure '                          # Add CP-IaaS-Azure group also as a SQL Server system administrator (the delimiter for /SQLSYSADMINACCOUNTS is simply a space)
 
 $myArgList += '/SECURITYMODE=SQL '                                 # Use SQL for Mixed Mode authentication
 $myArgList += '/SAPWD=W3lc0me0 '                                   # Specifies the password for the SQL Serversa account.
@@ -306,11 +319,11 @@ netsh advfirewall firewall add rule name="ILBProbePort-TCP-59999" dir=in action=
 #>
 $DatabaseName = "master"
 $Query = "
+
+          DBCC TRACEON (1117, 1118, 1204, 3226, 3605, -1);
+
           ALTER DATABASE tempdb
           MODIFY FILE (name = tempdev, FILENAME = 'T:\SQLTempDB\tempdb.mdf', SIZE = $($sizeTempDBDataFileMB)MB, FILEGROWTH = $($autogrowTempDBinMB)MB);
-          
-          ALTER DATABASE tempdb
-          MODIFY FILE (name = templog, FILENAME = 'U:\SQLTempLog\templog.ldf');
 
           ALTER DATABASE tempdb
           ADD FILE (NAME = tempdev2, FILENAME = 'T:\SQLTempDB\tempdb2.mdf', SIZE = $($sizeTempDBDataFileMB)MB, FILEGROWTH = $($autogrowTempDBinMB)MB);
