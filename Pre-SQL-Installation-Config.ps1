@@ -48,7 +48,7 @@ param (
 <# In PowerShell, functions must be defined before
    they are invoked. #>
 
-function Prompt-User {
+Function Prompt-User {
     <#
     .NAME
         Prompt-User
@@ -477,13 +477,11 @@ Stop-Service -Name ShellHWDetection
                 "SQLSys"
                 {
                     $pathsToCreate = @( "$($letter):\SQLSys")
-
                     foreach ($path in $pathsToCreate) {
                         if (!(Test-Path $path)) {
                             New-Item -ItemType directory -Path $path | Out-Null
                         }
                     }
-
                 }
                 
                 "SQLData"
@@ -493,10 +491,9 @@ Stop-Service -Name ShellHWDetection
                         $pathsToCreate = @( "$($letter):\SQLData",
                                             "$($letter):\SQLBackup")
                     }
-                    else {
-                        
+                    else {    
                          $pathsToCreate = @( "$($letter):\SQLData$($counter+1)",
-                                            "$($letter):\SQLBackup$($counter+1)")
+                                           "$($letter):\SQLBackup$($counter+1)")
 
                     }
 
@@ -505,7 +502,6 @@ Stop-Service -Name ShellHWDetection
                             New-Item -ItemType directory -Path $path | Out-Null
                         }
                     }
-
                 }
 
                 "SQLLog"
@@ -527,7 +523,6 @@ Stop-Service -Name ShellHWDetection
                             New-Item -ItemType directory -Path $path | Out-Null
                         }
                     }
-
                 }
                 
                 "TempDB"
@@ -539,7 +534,6 @@ Stop-Service -Name ShellHWDetection
                     else {
                         
                          $pathsToCreate = @( "$($letter):\TempDB$($counter+1)")
-
                     }
 
                     foreach ($path in $pathsToCreate) {
@@ -550,14 +544,11 @@ Stop-Service -Name ShellHWDetection
                 }
             }
             
-            
             #Update counter 
             $counter++
             $counters[$i].Counter = $counter
-
         }
     }
-
  }
 
  # Starts the Hardware Detection Service again
@@ -581,7 +572,6 @@ if (  (Get-WindowsFeature -Name Net-Framework-Core).InstallState -eq 'Installed'
 }else {
  
     throw "Error: .NET Framework 3.5 failed to install successfully."
-
 }
 
 ########################################
