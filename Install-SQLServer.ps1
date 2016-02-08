@@ -33,6 +33,8 @@
     AUTHOR: Carlos Patiño
     LASTEDIT: February 8, 2016
 
+    Passwords with a single quote (') our double quote (") are likely to fail.
+
 #>
 
 param (
@@ -110,9 +112,9 @@ $myArgList += '/SQMREPORTING=0 '                                   # Specify tha
 
 $myArgList += '/FEATURES=SQLENGINE,REPLICATION,FULLTEXT,IS,ADV_SSMS,BC,CONN,SNAC_SDK,SDK '  # Specifies the Features to install        
 
-$myArgList += '/INSTALLSHAREDDIR="E:\SQLSys\Program Files\MicrosoftSQL Server" '            # Specifies a nondefault installation directory for 64-bit shared components.
-$myArgList += '/INSTALLSHAREDWOWDIR="E:\SQLSys\Program Files(x86)\MicrosoftSQL Server" '    # Specifies a nondefault installation directory for 32-bit shared components. 
-$myArgList += '/INSTANCEDIR="E:\SQLSys\Program Files\MicrosoftSQL Server" '                 # Specifies a nondefault installation directory for instance-specific components.
+$myArgList += '/INSTALLSHAREDDIR="E:\SQLSys\Program Files\Microsoft SQL Server" '            # Specifies a nondefault installation directory for 64-bit shared components.
+$myArgList += '/INSTALLSHAREDWOWDIR="E:\SQLSys\Program Files(x86)\Microsoft SQL Server" '    # Specifies a nondefault installation directory for 32-bit shared components. 
+$myArgList += '/INSTANCEDIR="E:\SQLSys\Program Files\Microsoft SQL Server" '                 # Specifies a nondefault installation directory for instance-specific components.
 $myArgList += '/INSTALLSQLDATADIR="E:\SQLSys\Program Files\MicrosoftSQL Server" '           # Specifies the data directory for SQL Server data files.
 
 $myArgList += '/INSTANCENAME=MSSQLSERVER '                         # Specifies a SQL Server instance name.
