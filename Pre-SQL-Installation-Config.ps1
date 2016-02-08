@@ -24,19 +24,18 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: January 29 2016
+    LASTEDIT: February 8, 2016
 #>
 
 param (
-    [Parameter(Mandatory=$false)]
     [String]
-    $DotNet35SourcePath = "\\ps11170644tou02.cloud.wal-mart.com\Source\dotnet35source\sxs\",
+    $DotNet35SourcePath = "\\destinationVM\Source\dotnet35source\sxs\",
 
     [int]
-    $SQLServerPort = 14481,
+    $SQLServerPort = 1433,
 
     [int]
-    $SQLListenerPort = 14482,
+    $SQLListenerPort = 1434,
 
     [int]
     $SQLAlwaysOnPort = 5022
@@ -154,8 +153,8 @@ Function Get-AvailablePhysicalDisks {
         InUse is a boolean that is $true when the user has already selected this
         disk to be used by a particular SQL file type. False otherwise.
 
-        OriginalIndex, for the purposes of this variable, is useless. However,
-        another variable which will become a subset of $physicalDisks will
+        OriginalIndex, for the purposes of the $physicalDisks variable, is useless. However,
+        another variable, which will become a subset of $physicalDisks, will
         use this index to identify a Physical Disks location in the $physicalDisks
         array.
 
@@ -210,7 +209,7 @@ Function Get-AvailablePhysicalDisks {
             $availablePhysicalDisks[$k].OriginalIndex = $j
 
             # Update counter
-            $k++;
+            $k++
         }
     }
 
@@ -234,12 +233,14 @@ $sqlFileType = @(
                   "TempDB"
                  )
 
-<# Define an array of Objects. Each Object holds information about one SQL file type, in
+<# 
+Define an array of Objects. Each Object holds information about one SQL file type, in
      particular:
      1) The allowable volume letters that can be associated with each SQL file type.
      2) The allowable Volume File System Labels for eah SQL file type.
      3) The directory paths that can be created for each SQL file type
-     4) The maximum number of volumes allowed for each SQL file type #>
+     4) The maximum number of volumes allowed for each SQL file type 
+#>
 $sqlFileTypeInfo = @(
                     New-Object -TypeName PSObject -Prop @{
                         # SQLSys
@@ -331,13 +332,12 @@ for ($i=0; $i -lt ($unprocessedPhysicalDisks | Measure).Count; $i++)
 # Get user to select which disks to assign to which SQL file types
 ####################################################################
 
-<# Overarching logic:
+<# 
+Overarching logic:
     Loop through each SQL file type.
 
     For each file type, display the list of available disks, and have the user
     select the disks to be associated with that file type.
-
-    Store the selected disk names in an array within the variable $diskFileTypes
 #>
 
 # Loop through each file type
@@ -551,10 +551,10 @@ Stop-Service -Name ShellHWDetection
     }
  }
 
- # Starts the Hardware Detection Service again
+# Starts the Hardware Detection Service again
 Start-Service -Name ShellHWDetection
 
- Write-Host "Creating volumes and directories complete"
+Write-Host "Creating volumes and directories complete"
  
 
 ########################################

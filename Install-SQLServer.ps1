@@ -31,14 +31,13 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: January 31 2016
+    LASTEDIT: February 8, 2016
 
 #>
 
 param (
-    [ValidateNotNullOrEmpty()]
     [String]
-    $sqlInstallationPath = "\\ps11170644tou02.cloud.wal-mart.com\Source\SQLServer2014\Setup.exe",
+    $sqlInstallationPath = "\\targetVM\Source\SQLServer2014\Setup.exe",
 
     [String]
     $sqlServerSvcAcct = "CLOUD\SVCsqlserver",
@@ -53,23 +52,20 @@ param (
     $sqlAgentSvcAcctPwd = "testpassword",
 
     [String]
-    $intergrationServicesPwd = "W3lc0me0",
+    $intergrationServicesPwd = "testpassword",
 
     [String]
-    $sqlServerSAPwd = "W3lc0me0",
+    $sqlServerSAPwd = "testpassword",
 
     [int]
     $numTempDBFiles = 8,
 
-    [ValidateNotNullOrEmpty()]
     [int]
     $sizeTempDBDataFileMB = 5000,
 
-    [ValidateNotNullOrEmpty()]
     [int]
     $autogrowTempDBinMB = 500,
 
-    [ValidateNotNullOrEmpty()]
     [string]
     $LocalAdmin = "AzrRootAdminUser"
 
@@ -148,11 +144,18 @@ $myArgList += '/TCPENABLED=1'                                      # Enable TCP/
 
 Write-Host "Installing SQL Server..."
 
-# Start the installation process with the specified parameters.
-Start-Process -Verb runas -FilePath $sqlInstallationPath -ArgumentList $myArgList -Wait
+try {
+    # Start the installation process with the specified parameters.
+    Start-Process -Verb runas -FilePath $sqlInstallationPath -ArgumentList $myArgList -Wait
 
-# TODO: How to programatically verify tha SQL Server was successfully installed.
-Write-Host "SQL Server successfully installed."
+    # TODO: How to programatically verify tha SQL Server was successfully installed.
+    Write-Host "SQL Server successfully installed."
+
+} catch {
+    
+    throw "Error: Something went wrong with the SQL Server installation."
+
+}
 
 
 ########################################
