@@ -509,12 +509,12 @@ Stop-Service -Name ShellHWDetection
                     if ( $counter -eq 0 ) {
 
                         $pathsToCreate = @( "$($letter):\SQLLog",
-                                            "$($letter):\TempLog")
+                                            "$($letter):\TempDBLog")
                     }
                     else {
                         
                          $pathsToCreate = @( "$($letter):\SQLLog$($counter+1)",
-                                            "$($letter):\TempLog$($counter+1)")
+                                            "$($letter):\TempDBLog$($counter+1)")
 
                     }
 

@@ -122,7 +122,7 @@ $myArgList += "/AGTSVCPASSWORD=$sqlAgentSvcAcctPwd "               # Agent accou
 $myArgList += '/AGTSVCSTARTUPTYPE=Automatic '                      # Auto-start service after installation
 
 $myArgList += '/SQLTEMPDBDIR="T:\TempDB" '                         # Specifies the directory for the data files for tempdb.
-$myArgList += '/SQLTEMPDBLOGDIR="J:\TempLog" '                     # Specifies the directory for the log files for tempdb.
+$myArgList += '/SQLTEMPDBLOGDIR="J:\TempDBLog" '                   # Specifies the directory for the log files for tempdb.
 
 $myArgList += '/SQLUSERDBDIR="F:\SQLData" '                        # Specifies the directory for the data files for user databases.
 $myArgList += '/SQLBACKUPDIR="F:\SQLBackup" '                      # Specifies the directory for backup files.
