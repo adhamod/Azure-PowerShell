@@ -115,7 +115,7 @@ $myArgList += '/FEATURES=SQLENGINE,REPLICATION,FULLTEXT,IS,ADV_SSMS,BC,CONN,SNAC
 $myArgList += '/INSTALLSHAREDDIR="E:\SQLSys\Program Files\Microsoft SQL Server" '            # Specifies a nondefault installation directory for 64-bit shared components.
 $myArgList += '/INSTALLSHAREDWOWDIR="E:\SQLSys\Program Files(x86)\Microsoft SQL Server" '    # Specifies a nondefault installation directory for 32-bit shared components. 
 $myArgList += '/INSTANCEDIR="E:\SQLSys\Program Files\Microsoft SQL Server" '                 # Specifies a nondefault installation directory for instance-specific components.
-$myArgList += '/INSTALLSQLDATADIR="E:\SQLSys\Program Files\MicrosoftSQL Server" '           # Specifies the data directory for SQL Server data files.
+$myArgList += '/INSTALLSQLDATADIR="E:\SQLSys\Program Files\Microsoft SQL Server" '           # Specifies the data directory for SQL Server data files.
 
 $myArgList += '/INSTANCENAME=MSSQLSERVER '                         # Specifies a SQL Server instance name.
       
