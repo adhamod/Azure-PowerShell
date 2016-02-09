@@ -38,7 +38,7 @@ param (
     $SQLListenerPort = 1434,
 
     [int]
-    $SQLAlwaysOnPort = 5022
+    $ILBProbePort = 59999
     )
 
 ##############################################
@@ -583,10 +583,10 @@ Write-Host "Creating firewall rules..."
 # Customized firewall rules
 netsh advfirewall firewall add rule name="SQLServer-TCP-$SQLServerPort" dir=in action=allow protocol=TCP localport=$SQLServerPort
 netsh advfirewall firewall add rule name="SQLListener-TCP-$SQLListenerPort" dir=in action=allow protocol=TCP localport=$SQLListenerPort
-netsh advfirewall firewall add rule name="SQLAlwaysOn-TCP-$SQLAlwaysOnPort" dir=in action=allow protocol=TCP localport=$SQLAlwaysOnPort
+netsh advfirewall firewall add rule name="ILBProbePort-TCP-$ILBProbePort" dir=in action=allow protocol=TCP localport=$ILBProbePort
 
 # Typical TCP firewall rules
-netsh advfirewall firewall add rule name="ILBProbePort-TCP-59999" dir=in action=allow protocol=TCP localport=59999
+netsh advfirewall firewall add rule name="SQLAlwaysOn-TCP-5022" dir=in action=allow protocol=TCP localport=5022
 netsh advfirewall firewall add rule name="SQL-DAC-TCP-1434" dir=in action=allow protocol=TCP localport=1434
 
 # Typical UDP firewall rules
