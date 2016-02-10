@@ -187,7 +187,7 @@ $Query += "`n `n"
 
 # Set the first TempDB file according to user-selected initial size and autogrow size
 $Query += "ALTER DATABASE tempdb `n"
-$Query += "MODIFY FILE (name = tempdev, FILENAME = 'T:\SQLTempDB\tempdb.mdf', SIZE = $($sizeTempDBDataFileMB)MB, FILEGROWTH = $($autogrowTempDBinMB)MB);"
+$Query += "MODIFY FILE (name = tempdev, FILENAME = 'T:\TempDB\tempdb.mdf', SIZE = $($sizeTempDBDataFileMB)MB, FILEGROWTH = $($autogrowTempDBinMB)MB);"
 
 # If the user has selected to make more than 1 TempDB file, loop through to build the string for SQL query to add new TempDB files
 if (   $numTempDBFiles -gt 1   ) {
