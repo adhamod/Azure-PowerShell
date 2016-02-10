@@ -33,7 +33,7 @@
     AUTHOR: Carlos Patiño
     LASTEDIT: February 8, 2016
 
-    Passwords with a single quote (') our double quote (") are likely to fail.
+    WARNING: Passwords with a single quote (') our double quote (") are likely to fail.
 
 #>
 
@@ -190,7 +190,7 @@ $Query += "MODIFY FILE (name = tempdev, FILENAME = 'T:\SQLTempDB\tempdb.mdf', SI
 # If the user has selected to make more than 1 TempDB file, loop through to build the string for SQL query to add new TempDB files
 if (   $numTempDBFiles -gt 1   ) {
     
-    for ($i=2; $i -le 8; $i++) {
+    for ($i=2; $i -le $numTempDBFiles; $i++) {
         
         $Query += "`n `n"
         $Query += "ALTER DATABASE tempdb `n"
