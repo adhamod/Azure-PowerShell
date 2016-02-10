@@ -34,6 +34,8 @@
     LASTEDIT: February 8, 2016
 
     WARNING: Passwords with a single quote (') our double quote (") are likely to fail.
+    
+    WARNING: Service accounts with a space in them (such as "NT Service\MSSQLSERVER") will fail.
 
 #>
 
