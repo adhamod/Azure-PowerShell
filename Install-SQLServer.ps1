@@ -129,7 +129,7 @@ $myArgList += '/SQLTEMPDBDIR="T:\TempDB" '                         # Specifies t
 $myArgList += '/SQLTEMPDBLOGDIR="J:\TempDBLog" '                   # Specifies the directory for the log files for tempdb.
 
 $myArgList += '/SQLUSERDBDIR="F:\SQLData" '                        # Specifies the directory for the data files for user databases.
-$myArgList += '/SQLBACKUPDIR="F:\SQLBackup" '                      # Specifies the directory for backup files.
+$myArgList += '/SQLBACKUPDIR="E:\SQLBackup" '                      # Specifies the directory for backup files.
 $myArgList += '/SQLUSERDBLOGDIR="J:\SQLLog" '                      # Specifies the directory for the log files for user databases.
 
 $myArgList += '/ISSVCACCOUNT="NT AUTHORITY\NETWORK SERVICE" '      # Specifies the account for Integration Services.

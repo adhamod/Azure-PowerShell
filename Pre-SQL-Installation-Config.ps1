@@ -476,7 +476,10 @@ Stop-Service -Name ShellHWDetection
             {
                 "SQLSys"
                 {
-                    $pathsToCreate = @( "$($letter):\SQLSys")
+                    $pathsToCreate = @( "$($letter):\SQLSys",
+                                        "$($letter):\SQLBackup",
+                                        "$($letter):\DBA_Logs")
+
                     foreach ($path in $pathsToCreate) {
                         if (!(Test-Path $path)) {
                             New-Item -ItemType directory -Path $path | Out-Null
@@ -488,12 +491,10 @@ Stop-Service -Name ShellHWDetection
                 {
                     if ( $counter -eq 0 ) {
 
-                        $pathsToCreate = @( "$($letter):\SQLData",
-                                            "$($letter):\SQLBackup")
+                        $pathsToCreate = @( "$($letter):\SQLData")
                     }
                     else {    
-                         $pathsToCreate = @( "$($letter):\SQLData$($counter+1)",
-                                           "$($letter):\SQLBackup$($counter+1)")
+                         $pathsToCreate = @( "$($letter):\SQLData$($counter+1)")
 
                     }
 
