@@ -423,6 +423,15 @@ $counters = @(
 # Stops the Hardware Detection Service to prevent the Format Disk prompt window from popping up
 Stop-Service -Name ShellHWDetection
 
+# If the CD or DVD drive is configured on the E drive, move it to the Z drive
+if ((New-Object System.IO.DriveInfo "E").DriveType -ne "NoRootDirectory") {
+
+    $drv = Get-WmiObject win32_volume -filter 'DriveLetter = "E:"'
+    $drv.DriveLetter = "Z:"
+    $drv.Put() | Out-Null
+}
+
+
 <# Loop through each SQL file type. For every physical disk assigned to that
    file type, initialize that disk and create a volume. Additionally, also
    create a directory in each volume.#>
