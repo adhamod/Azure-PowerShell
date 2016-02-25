@@ -33,10 +33,6 @@
     AUTHOR: Carlos Patiño
     LASTEDIT: February 8, 2016
 
-    WARNING: Passwords with a single quote (') our double quote (") are likely to fail.
-    
-    WARNING: Service accounts with a space in them (such as "NT Service\MSSQLSERVER") will fail.
-
 #>
 
 param (
@@ -104,6 +100,10 @@ $ErrorActionPreference = "Stop";
 - Software development kit
 #>
 
+# To accommodate for the case where the password has double quotes around it, place single quotes around the password:
+$sqlAgentSvcAcctPwd = "`'$sqlAgentSvcAcctPwd`'"
+$sqlServerSvcAcctPwd = "`'$sqlServerSvcAcctPwd`'"
+
 # Specify installation parameters
 $myArgList =  '/QS '                                               # Only shows progress, does not accept any user input
 $myArgList += '/ACTION=INSTALL '
@@ -145,6 +145,8 @@ $myArgList += '/SECURITYMODE=SQL '                                 # Use SQL for
 $myArgList += "/SAPWD=$sqlServerSAPwd "                            # Specifies the password for the SQL Server sa account.
 
 $myArgList += '/TCPENABLED=1'                                      # Enable TCP/IP Protocol
+
+$myArgList
 
 Write-Host "Installing SQL Server..."
 
