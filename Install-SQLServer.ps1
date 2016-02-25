@@ -49,7 +49,7 @@ param (
     $sqlAgentSvcAcct = "CLOUD\SVCsqlagent",
 
     [String]
-    $sqlAgentSvcAcctPwd = "testpassword",
+    $sqlAgentSvcAcctPwd = 'test"pass"word',
 
     [String]
     $intergrationServicesPwd = "testpassword",
@@ -70,6 +70,30 @@ param (
     $LocalAdmin = "AzrRootAdminUser"
 
     )
+
+
+Function Insert-EscapeParamForDoubleQuote {
+    param (
+        [string]
+        $originalPW
+
+        )
+
+        # Add escape parameter for double quotes in CMD Prompt
+        $originalPW -replace '"','""'
+
+}
+
+Function Insert-EscapeParamForSingleQuote {
+    param (
+        [string]
+        $originalPW
+
+        )
+
+        # Add escape parameter for single quotes in CMD Prompt
+        $originalPW -replace "`'","^`'"
+}
 
 
 ########################################
@@ -100,9 +124,12 @@ $ErrorActionPreference = "Stop";
 - Software development kit
 #>
 
-# To accommodate for the case where the password has double quotes around it, place single quotes around the password:
-$sqlAgentSvcAcctPwd = "`'$sqlAgentSvcAcctPwd`'"
-$sqlServerSvcAcctPwd = "`'$sqlServerSvcAcctPwd`'"
+# To accommodate for the case where the password has double quotes or single quotes around it, add the appropriate escape characters for the command prompt
+$sqlAgentSvcAcctPwd = Insert-EscapeParamForDoubleQuote -originalPW $sqlAgentSvcAcctPwd
+$sqlAgentSvcAcctPwd = Insert-EscapeParamForSingleQuote -originalPW $sqlAgentSvcAcctPwd
+
+$sqlServerSvcAcctPwd = Insert-EscapeParamForDoubleQuote -originalPW $sqlServerSvcAcctPwd
+$sqlServerSvcAcctPwd = Insert-EscapeParamForSingleQuote -originalPW $sqlServerSvcAcctPwd
 
 # Specify installation parameters
 $myArgList =  '/QS '                                               # Only shows progress, does not accept any user input
