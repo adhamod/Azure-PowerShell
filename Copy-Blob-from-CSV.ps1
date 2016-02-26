@@ -15,32 +15,54 @@ This script has been tested to function correctly in both ASM and ARM.
 
 This script has been tested to function correctly in Azure PowerShell version 1.0.1
 
-This script also works when the source VHD file has a lease (i.e. the VHD file is being used for an Azure disk).
+.PARAMETER srcStorageAccountName
+	Name of the SOURCE storage account
 
-Author: Carlos Patiño, carpat@microsoft.com
+.PARAMETER srcStorageAccountKey
+    Account Key of the SOURCE storage account
+
+.PARAMETER csvPath
+    Complete path for the CSV file where all the container names and blob names for all the blobs to be copied are stored.
+
+.PARAMETER destStorageAccountName
+    Name of the DESTINATION storage account
+
+.PARAMETER destContainerName
+    Container name in which the DESTINATION file will be located (container must be inside DESTINATION storage account)
+
+.NOTES
+    AUTHOR: Carlos Patiño
+    LASTEDIT: February 26, 2016
 #>
+
+param (
+    $srcStorageAccountName = "testStorAcctName",
+
+    $srcStorageAccountKey = "testStorAcctKey",
+
+    $csvPath = "C:\testfile.csv",
+
+    $destStorageAccountName = "destinationStorAcctName",
+
+    $destContainerName = "destinationContainer"
+
+)
 
 
 ##################################
-# START OF REQUIRED USER INPUT
+# Build connection strings
 ##################################
 
 # Connection String for the SOURCE storage account
-$srcConnectionString = "DefaultEndpointsProtocol=https;AccountName=xxxx;AccountKey=xxxx"
-
-# Complete path for the CSV file where all the container names and blob names for all the blobs to be copied are stored.
-$csvPath = "C:\Users\carpat\Desktop\testcsvfile.csv"
+$srcConnectionString = "DefaultEndpointsProtocol=https;AccountName=$srcStorageAccountName;AccountKey=$srcStorageAccountKey"
 
 ###
 
 # Connection String for the DESTINATION storage account
-$destConnectionString = "DefaultEndpointsProtocol=https;AccountName=xxxx;AccountKey=xxx"
-
-# Container name in which the DESTINATION file will be located (container must be inside DESTINATION storage account)
-$destContainerName = "testdestinationcontainer"
+$destConnectionString = "DefaultEndpointsProtocol=https;AccountName=$destStorageAccountName;AccountKey=$destStorageContainerName"
 
 ##################################
-# END OF REQUIRED USER INPUT
+# Start copy operation
 ##################################
 
 # Make context for SOURCE storage account
