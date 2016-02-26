@@ -30,6 +30,9 @@ This script has been tested to function correctly in Azure PowerShell version 1.
 .PARAMETER destContainerName
     Container name in which the DESTINATION file will be located (container must be inside DESTINATION storage account)
 
+.PARAMETER destStorageAccountKey
+    Account Key of the DESTINATION storage account
+
 .NOTES
     AUTHOR: Carlos Patiño
     LASTEDIT: February 26, 2016
@@ -44,7 +47,9 @@ param (
 
     $destStorageAccountName = "destinationStorAcctName",
 
-    $destContainerName = "destinationContainer"
+    $destContainerName = "destinationContainer",
+
+    $destStorageAccountKey = "testStorAcctKey"
 
 )
 
@@ -59,7 +64,7 @@ $srcConnectionString = "DefaultEndpointsProtocol=https;AccountName=$srcStorageAc
 ###
 
 # Connection String for the DESTINATION storage account
-$destConnectionString = "DefaultEndpointsProtocol=https;AccountName=$destStorageAccountName;AccountKey=$destStorageContainerName"
+$destConnectionString = "DefaultEndpointsProtocol=https;AccountName=$destStorageAccountName;AccountKey=$destStorageAccountKey"
 
 ##################################
 # Start copy operation
