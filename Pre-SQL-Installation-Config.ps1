@@ -584,6 +584,12 @@ if (  (Get-WindowsFeature -Name Net-Framework-Core).InstallState -eq 'Installed'
     throw "Error: .NET Framework 3.5 failed to install successfully."
 }
 
+Write-Host "Installing AD DS and AD LDS Tools..."
+Install-WindowsFeature -Name RSAT-AD-Tools | Out-Null
+
+Write-Host "Installing Failover Clustering..."
+Install-WindowsFeature -Name Failover-Clustering | Out-Null
+
 ########################################
 # Create Firewall Rules
 ########################################
