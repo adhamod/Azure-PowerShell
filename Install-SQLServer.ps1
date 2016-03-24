@@ -15,7 +15,7 @@
             - Nondefault locations are used for User databases, Backups, System databases, and Log files, according to
                 a company standard and SQL Server best practices.
         - Performs certain post-installation SQL Server configurations through a SQL query:
-            - Set the number of TempDB files
+            - Set the number of TempDB files to the number of cores of this VM, or to 8 (whichever is least)
             - Set the size and autogrow sizes of the TempDB files
             - Enable certain flags
             
@@ -31,7 +31,7 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: February 8, 2016
+    LASTEDIT: March 24, 2016
 
 #>
 
@@ -58,9 +58,6 @@ param (
     $sqlServerSAPwd = "testpassword",
 
     [int]
-    $numTempDBFiles = 8,
-
-    [int]
     $sizeTempDBDataFileMB = 5000,
 
     [int]
@@ -79,8 +76,10 @@ Function Insert-EscapeParamForDoubleQuote {
 
         )
 
+        # Reference document: http://www.daviddeley.com/autohotkey/parameters/parameters.htm
+
         # Add escape parameter for double quotes in CMD Prompt
-        $originalPW -replace '"','""'
+        $originalPW -replace '"','\"'
 
 }
 
@@ -90,6 +89,8 @@ Function Insert-EscapeParamForSingleQuote {
         $originalPW
 
         )
+
+        # Reference document: http://www.daviddeley.com/autohotkey/parameters/parameters.htm
 
         # Add escape parameter for single quotes in CMD Prompt
         $originalPW -replace "`'","^`'"
@@ -124,7 +125,9 @@ $ErrorActionPreference = "Stop";
 - Software development kit
 #>
 
-# To accommodate for the case where the password has double quotes or single quotes around it, add the appropriate escape characters for the command prompt
+<#
+To accommodate for the case where the password has double quotes or single quotes around it, add the appropriate escape characters for the command prompt
+#>
 $sqlAgentSvcAcctPwd = Insert-EscapeParamForDoubleQuote -originalPW $sqlAgentSvcAcctPwd
 $sqlAgentSvcAcctPwd = Insert-EscapeParamForSingleQuote -originalPW $sqlAgentSvcAcctPwd
 
@@ -218,7 +221,15 @@ $Query += "`n `n"
 $Query += "ALTER DATABASE tempdb `n"
 $Query += "MODIFY FILE (name = tempdev, FILENAME = 'T:\TempDB\tempdb.mdf', SIZE = $($sizeTempDBDataFileMB)MB, FILEGROWTH = $($autogrowTempDBinMB)MB);"
 
-# If the user has selected to make more than 1 TempDB file, loop through to build the string for SQL query to add new TempDB files
+# Set the number of TempDB files to the number of cores of this VM, or to 8 (whichever is least)
+$numCores = (Get-WmiObject Win32_Processor).NumberOfCores
+
+if ($numCores -le 8) {
+    $numTempDBFiles = $numCores
+} else {
+    $numTempDBFiles = 8
+}
+
 if (   $numTempDBFiles -gt 1   ) {
     
     for ($i=2; $i -le $numTempDBFiles; $i++) {
