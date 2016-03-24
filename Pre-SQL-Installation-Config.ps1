@@ -588,7 +588,7 @@ Write-Host "Installing AD DS and AD LDS Tools..."
 Install-WindowsFeature -Name RSAT-AD-Tools | Out-Null
 
 Write-Host "Installing Failover Clustering..."
-Install-WindowsFeature -Name Failover-Clustering | Out-Null
+Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools | Out-Null
 
 ########################################
 # Create Firewall Rules
