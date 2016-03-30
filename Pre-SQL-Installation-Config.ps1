@@ -250,18 +250,18 @@ Function Create-FirewallRule {
         $protocol = ""
     )
 
-    Write-Host "Checking for $firewallRuleName firewall rule on $protocol port $firewallPort now...."
-    if ( $(  Get-NetFirewallRule –DisplayName $firewallRuleName | Get-NetFirewallPortFilter | Where { $_.LocalPort -eq $firewallPort -and $_.Protocol -eq $protocol} ) )
+    Write-Host "Checking for $firewallRuleName firewall rule now...."
+    if ( $(  Get-NetFirewallRule | Where {$_.DisplayName -eq $firewallRuleName } ) )
     {
-        Write-Host "Firewall rule for $firewallRuleName on $protocol port $firewallPort already exists, not creating new rule."
+        Write-Host "Firewall rule $firewallRuleName already exists, not creating new rule."
     }
     else
     {
-        Write-Host "Firewall rule for '$firewallRuleName' on $protocol port '$firewallPort' does not already exist, creating new rule now..."
+        Write-Host "Firewall rule $firewallRuleName does not already exist, creating new rule now..."
 
         New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Profile Domain,Private,Public -Action Allow -Protocol TCP -LocalPort $firewallPort -RemoteAddress Any
 
-        Write-Host "Firewall rule for $firewallRuleName on $protocol port $firewallPort created successfully."
+        Write-Host "Firewall rule $firewallRuleName on $protocol port $firewallPort created successfully."
     }
 
 }
