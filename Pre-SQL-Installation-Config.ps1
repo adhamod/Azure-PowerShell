@@ -259,7 +259,8 @@ Function Create-FirewallRule {
     {
         Write-Host "Firewall rule $firewallRuleName does not already exist, creating new rule now..."
 
-        New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Profile Domain,Private,Public -Action Allow -Protocol TCP -LocalPort $firewallPort -RemoteAddress Any
+        New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Profile Domain,Private,Public `
+                            -Action Allow -Protocol TCP -LocalPort $firewallPort -RemoteAddress Any | Out-Null
 
         Write-Host "Firewall rule $firewallRuleName on $protocol port $firewallPort created successfully."
     }
