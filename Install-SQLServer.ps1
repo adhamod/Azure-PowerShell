@@ -299,9 +299,6 @@ if (   $numTempDBFiles -gt 1   ) {
     }
 }
 
-
-$Query
-
 # Database name on which to perform query
 $DatabaseName = "master"
 
