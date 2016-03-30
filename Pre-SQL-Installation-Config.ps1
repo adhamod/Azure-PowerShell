@@ -16,15 +16,16 @@
     - Each volume is appropriately formatted
     - Appropriate directories are created in each new volume.
     - .NET Framework 3.5 is installed.
+    - AD DS and AD LDS Tools, and Failover Clustering, is installed.
     - Certain firewall rules are created.
 
-    Precondition: several Azure data disks have already been attached to the VM. These data disks
-    already have the desired Cache setting configured ('None' for disks intended for SQL Server Log 
-    files, and 'Read Only' for disks intended for all other types of files)
+    PRECONDITION: several Azure data disks have already been attached to the VM. These data disks
+        already have the desired Cache setting configured ('None' for disks intended for SQL Server Log 
+        files, and 'Read Only' for disks intended for all other types of files)
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: February 8, 2016
+    LASTEDIT: March 30, 2016
 #>
 
 param (
@@ -217,6 +218,54 @@ Function Get-AvailablePhysicalDisks {
     return $availablePhysicalDisks
 }
 
+Function Create-FirewallRule {
+    <#
+    .NAME
+        Create-FirewallRule
+
+    .DESCRIPTION
+        Create a new Allow Inbound firewall rule with a specified Name, Port, and Protocol.
+        Only create the rule if it does not already exist.
+
+    .PARATEMETER firewallPort
+        The firewall port to open up.
+
+    .PARAMETER firewallRuleName
+        The display name of the new firewall rule.
+
+    .PARAMETER protocol
+        The transport layer protocol to be used for the new firewall rule. Only TCP or UDP allowed.
+
+    #>
+    param(
+        
+        [int]
+        $firewallPort = "",
+
+        [string]
+        $firewallRuleName = "",
+
+        [string]
+        [ValidateSet('TCP','UDP')]
+        $protocol = ""
+    )
+
+    Write-Host "Checking for $firewallRuleName firewall rule on $protocol port $firewallPort now...."
+    if ( $(  Get-NetFirewallRule –DisplayName $firewallRuleName | Get-NetFirewallPortFilter | Where { $_.LocalPort -eq $firewallPort -and $_.Protocol -eq $protocol} ) )
+    {
+        Write-Host "Firewall rule for $firewallRuleName on $protocol port $firewallPort already exists, not creating new rule."
+    }
+    else
+    {
+        Write-Host "Firewall rule for '$firewallRuleName' on $protocol port '$firewallPort' does not already exist, creating new rule now..."
+
+        New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Profile Domain,Private,Public -Action Allow -Protocol TCP -LocalPort $firewallPort -RemoteAddress Any
+
+        Write-Host "Firewall rule for $firewallRuleName on $protocol port $firewallPort created successfully."
+    }
+
+}
+
 ########################################
 # Initialize variables
 ########################################
@@ -289,13 +338,19 @@ $allocationUnitSize = 65536 # 64KB
 $shortpadspace = 7
 
 try{
-    # Get the full list of Physical Disks available to be created into Virtual Disks
+    # Get the full list of Physical Disks available to be Initialized
     $unprocessedPhysicalDisks = Get-PhysicalDisk -CanPool $true | Sort FriendlyName
 
 }catch {
 
     throw "There are no available Physical Disks. Check that VM has Azure data disks attached."
 
+}
+
+# Check to see if there are at least 4 available disks (at least 1 disk for each SQL file type)
+if ( ($unprocessedPhysicalDisks | Measure).Count -lt 4 ) {
+    
+    throw "There are less than 4 available physical disks. Please verify that this VM has at least 4 data disks attached, and that these disks have not yet been initialized."
 }
 
 <# Initialize an array of Objects
@@ -568,7 +623,8 @@ Write-Host "Creating volumes and directories complete"
  
 
 ########################################
-# Install .NET Framework 3.5
+# Install .NET Framework 3.5, AD DS and
+# AD LDS Tools, and Failover Clustering
 ########################################
 
 Write-Host "Installing .NET Framework 3.5..."
@@ -581,7 +637,7 @@ if (  (Get-WindowsFeature -Name Net-Framework-Core).InstallState -eq 'Installed'
 
 }else {
  
-    throw "Error: .NET Framework 3.5 failed to install successfully."
+    throw "Error: .NET Framework 3.5 failed to install. Check the path of the .NET Framework 3.5 source files."
 }
 
 Write-Host "Installing AD DS and AD LDS Tools..."
@@ -594,20 +650,18 @@ Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools | Out-N
 # Create Firewall Rules
 ########################################
 
-Write-Host "Creating firewall rules..."
-
 # Customized firewall rules
-netsh advfirewall firewall add rule name="SQLServer-TCP-$SQLServerPort" dir=in action=allow protocol=TCP localport=$SQLServerPort
-netsh advfirewall firewall add rule name="SQLListener-TCP-$SQLListenerPort" dir=in action=allow protocol=TCP localport=$SQLListenerPort
-netsh advfirewall firewall add rule name="ILBProbePort-TCP-$ILBProbePort" dir=in action=allow protocol=TCP localport=$ILBProbePort
+Create-FirewallRule -firewallRuleName "SQLServer-TCP-$SQLServerPort" -firewallPort $SQLServerPort -protocol TCP
+Create-FirewallRule -firewallRuleName "SQLListener-TCP-$SQLListenerPort" -firewallPort $SQLListenerPort -protocol TCP
+Create-FirewallRule -firewallRuleName "ILBProbePort-TCP-$ILBProbePort" -firewallPort $ILBProbePort -protocol TCP
 
 # Typical TCP firewall rules
-netsh advfirewall firewall add rule name="SQLAlwaysOn-TCP-5022" dir=in action=allow protocol=TCP localport=5022
-netsh advfirewall firewall add rule name="SQL-DAC-TCP-1434" dir=in action=allow protocol=TCP localport=1434
+Create-FirewallRule -firewallRuleName "SQLAlwaysOn-TCP-5022" -firewallPort 5022 -protocol TCP
+Create-FirewallRule -firewallRuleName "SQL-DAC-TCP-1434" -firewallPort 1434 -protocol TCP
 
 # Typical UDP firewall rules
-netsh advfirewall firewall add rule name="SQLBrowser-UDP-1434" dir=in action=allow protocol=UDP localport=1434
-netsh advfirewall firewall add rule name="ClusterAdmin-UDP-137" dir=in action=allow protocol=UDP localport=137
-netsh advfirewall firewall add rule name="WindowsClusterService-UDP-3343" dir=in action=allow protocol=UDP localport=3343
+Create-FirewallRule -firewallRuleName "SQLBrowser-UDP-1434" -firewallPort 1434 -protocol UDP
+Create-FirewallRule -firewallRuleName "ClusterAdmin-UDP-137" -firewallPort 137 -protocol UDP
+Create-FirewallRule -firewallRuleName "WindowsClusterService-UDP-3343" -firewallPort 3343 -protocol UDP
 
 Write-Host "Firewall rules successfully created"
