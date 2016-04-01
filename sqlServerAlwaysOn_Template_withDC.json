@@ -29,7 +29,7 @@
     "vmAdminUsername": {
       "type": "string",
       "metadata": {
-        "description": "Admin username for SQL nodes, Witness, and DC server VMs"
+        "description": "Admin username"
       }
     },
     "vmAdminPassword": {

@@ -5,17 +5,18 @@
 
 
 #### USER INPUITS
-$container_name = 'packageitems'
-$destination_path = 'C:\pstest'
-$accountname = 'add account name here'
-$accountkey = 'add account key here'
 
+$container_name = 'extensionrepo'
+$destination_path = 'C:\temp'
+$accountname = 'wmextrepeu2'
+$accountkey = '+m4zCUxV+4DdE1KEOZuw+rrwOT2lKdftHdSGWaqdutrLCAuJqaV2BNX68GmhxjTsxGKAZv8AYXGDjxmC6H5YEg=='
 
 #### MAIN FUNCTION
 
 $connection_string = "DefaultEndpointsProtocol=https;AccountName=$accountname;AccountKey=$accountkey"
 
 $storage_account = New-AzureStorageContext -ConnectionString $connection_string
+
 
 $blobs = Get-AzureStorageBlob -Container $container_name -Context $storage_account
 
@@ -28,3 +29,10 @@ foreach ($blob in $blobs)
         -Context $storage_account
 
     }
+
+
+
+<#
+Set-AzureStorageBlobContent -Blob "testfilecarlos.txt" -Container $container_name `
+                            -File "C:\temp\testfilecarlos.txt" -Context $storage_account
+#>
