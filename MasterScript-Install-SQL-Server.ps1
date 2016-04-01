@@ -71,8 +71,7 @@ param (
 $ErrorActionPreference = 'Stop'
 
 # Prompt the user for a domain credential that will have access to all of the VMs
-$secpassword = ConvertTo-SecureString "Okisthesim33" -AsPlainText -Force
-$cred = New-Object System.Management.Automation.PSCredential ('HOMEOFFICE\caapat1',$secpassword)
+Get-Credential
 
 echo "`n Processing $vm"
 
