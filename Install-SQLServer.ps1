@@ -65,7 +65,7 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: March 30, 2016
+    LASTEDIT: April 1, 2016
 
 #>
 
@@ -168,7 +168,7 @@ for ($i=0; $i -lt ($sqlAdminsArray | Measure).Count; $i ++) {
 #>
 
 # Specify installation parameters
-$myArgList =  '/QS '                                               # Only shows progress, does not accept any user input
+$myArgList =  '/Q '                                                # Fully quiet installation
 $myArgList += '/ACTION=INSTALL '
 $myArgList += '/IAcceptSQLServerLicenseTerms=1 '                   # Accept the SQL Server license agreement
 $myArgList += '/UPDATEENABLED=0 '                                  # Specify to NOT include product updates.
@@ -234,7 +234,7 @@ $myArgList += "/SAPWD=$sqlServerSAPwd "                            # Specifies t
 $myArgList += '/TCPENABLED=1'                                      # Enable TCP/IP Protocol
 
 # Display the list of arguments to the user
-$myArgList
+Write-Host "`n `n $myArgList"
 
 Write-Host "`n `n Installing SQL Server..."
 
@@ -267,7 +267,7 @@ try {
     
 #>
 
-Write-Host "Configuring TempDB files and enabling SQL Server flags..."
+Write-Host "Running a SQL Query to configure TempDB files and enable SQL Server flags..."
 
 # Enable certain trace flags.
 $Query = "DBCC TRACEON (1117, 1118, 1204, 3226, 3605, -1);"
