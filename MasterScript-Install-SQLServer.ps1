@@ -71,7 +71,7 @@ param (
 $ErrorActionPreference = 'Stop'
 
 # Prompt the user for a domain credential that will have access to all of the VMs
-Get-Credential
+$cred = Get-Credential
 
 echo "`n Processing $vm"
 
