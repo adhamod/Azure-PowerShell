@@ -164,6 +164,7 @@ try{
 
     Invoke-Command -ComputerName $vm `
                    -Credential $cred `
+                   -Authentication Credssp `
                    -SessionOption (New-PSSessionOption -IdleTimeout 120000) `
                    -ScriptBlock $codeBlock `
                    -ArgumentList $sqlInstallationPath, $DotNet35SourcePath
@@ -232,6 +233,7 @@ try{
     # Use IdleTimeout of 7,200,000 milliseconds (2 hours)
     Invoke-Command -ComputerName $vm `
                    -Credential $cred `
+                   -Authentication Credssp `
                    -SessionOption (New-PSSessionOption -IdleTimeout 7200000) `
                    -FilePath "$PSScriptRoot\Install-SQLServer.ps1" `
                    -ArgumentList $sqlInstallationPath,`
