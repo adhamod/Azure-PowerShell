@@ -76,6 +76,30 @@ $cred = Get-Credential
 echo "`n Processing $vm"
 
 
+<#
+Function to disable CredSSP authentication
+This will be run either as a clean-up activity at the end of the script,
+or will be run if any errors are thrown during the script execution.
+#>
+function Disable-CredSSP {
+    
+    param(
+        [string] $vm,
+        $cred
+    )
+
+    # Disable Util server as the CredSSP Client
+    Write-Host "Disabling current VM as CredSSP client...."
+    Disable-WSManCredSSP -Role Client
+
+    # Disable the target VM as the CredSSP Server
+    Write-Host "Disabling target VM as CredSSP server..."
+    Invoke-Command -ComputerName $vm `
+                   -Credential $cred `
+                   -SessionOption (New-PSSessionOption -IdleTimeout 120000) `
+                   -ScriptBlock { Disable-WSManCredSSP -Role Server }
+}
+
 
 
 ################################################
@@ -177,7 +201,8 @@ try{
     
     Write-Host "Verifying access to file share locations on target VM failed."
 
-    Remove-PSSession -Session $psSession
+    # Cleanup activity
+    Disable-CredSSP -vm $vm -cred $cred
 
     Write-Host "Error message:"
     throw "$ErrorMessage"
@@ -212,7 +237,8 @@ try {
     
     Write-Host "Pre-SQL-Installation-Config.ps1 failed."
 
-    Remove-PSSession -Session $psSession
+    # Cleanup activity
+    Disable-CredSSP -vm $vm -cred $cred
 
     Write-Host "Error message:"
     throw "$ErrorMessage"
@@ -256,7 +282,8 @@ try{
     
     Write-Host "Install-SQLServer.ps1 failed."
 
-    Remove-PSSession -Session $psSession
+    # Cleanup activity
+    Disable-CredSSP -vm $vm -cred $cred
 
     Write-Host "Error message:"
     throw "$ErrorMessage"
@@ -264,6 +291,52 @@ try{
 }
 
 
+<#
+
+################################################
+# Run Post-SQL-Installation-Config.ps1 remotely
+###############################################
+
+try{
+
+    Write-Host "Running Install-SQLServer.ps1..."
+
+    # Use IdleTimeout of 7,200,000 milliseconds (2 hours)
+    Invoke-Command -ComputerName $vm `
+                   -Credential $cred `
+                   -Authentication Credssp `
+                   -SessionOption (New-PSSessionOption -IdleTimeout 7200000) `
+                   -FilePath "$PSScriptRoot\Post-SQL-Installation-Config.ps1" `
+                   -ArgumentList $sqlInstallationPath,`
+                                 $LocalAdmin,`
+                                 $sqlServerSAPwd,`
+                                 $sqlAdminsArray,`
+                                 $sizeTempDBDataFileMB,`
+                                 $autogrowTempDBinMB,`
+                                 $UseDefaultLocalServiceAccounts,`
+                                 $sqlServerSvcAcct,`
+                                 $sqlServerSvcAcctPwd,`
+                                 $sqlAgentSvcAcct,`
+                                 $sqlAgentSvcAcctPwd
+                                    
+    Write-Host "Finished execution of Install-SQLServer.ps1"
+
+} catch {
+
+    $ErrorMessage = $_.Exception.Message
+    
+    Write-Host "Post-SQL-Installation-Config.ps1 failed."
+
+    # Cleanup activity
+    Disable-CredSSP -vm $vm -cred $cred
+
+    Write-Host "Error message:"
+    throw "$ErrorMessage"
+
+}
+
+
+#>
 
 
 ################################################
