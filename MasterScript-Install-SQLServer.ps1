@@ -184,7 +184,7 @@ try {
     $ErrorMessage = $_.Exception.Message
     
     Write-Host "Pre-SQL-Installation-Config.ps1 failed with the following error message:"
-    Write-Host "$ErrorMessage"
+    throw "$ErrorMessage"
 
 }
 
@@ -226,7 +226,7 @@ try{
     $ErrorMessage = $_.Exception.Message
     
     Write-Host "Install-SQLServer.ps1 failed with the following error message:"
-    Write-Host "$ErrorMessage"
+    throw "$ErrorMessage"
 
 }
 
@@ -249,9 +249,9 @@ try {
 
 } catch {
 
-        $ErrorMessage = $_.Exception.Message
+    $ErrorMessage = $_.Exception.Message
     
-        Write-Host "Disabling CredSSP on target and/or current VM failed with the following error message:"
-        Write-Host "$ErrorMessage"
+    Write-Host "Disabling CredSSP on target and/or current VM failed with the following error message:"
+    throw "$ErrorMessage"
 
 }
