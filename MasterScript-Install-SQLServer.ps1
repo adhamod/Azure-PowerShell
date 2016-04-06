@@ -92,9 +92,11 @@ try {
 
     $ErrorMessage = $_.Exception.Message
     
-    Write-Host "Cannot verify that the WinRM service is running on target VM. Failed with following error message:"
-    Write-Host "$ErrorMessage"
-    Write-Host "Run the ""Enable-PSRemoting"" cmdlet on target VM to enture PowerShell remoting is enabled."
+
+    Write-Host "Cannot verify that the WinRM service is running on target VM."
+    Write-Host "Run the ""Enable-PSRemoting"" cmdlet on target VM to enture PowerShell remoting is enabled." 
+    Write-Host "Cmdlet ""Test-WSMan"" failed with following error message:"
+    throw "$ErrorMessage"
 
 }
 
@@ -121,7 +123,7 @@ try {
     $ErrorMessage = $_.Exception.Message
     
     Write-Host "Configuring CredSSP authentication between current and target VM failed with error message:"
-    Write-Host "$ErrorMessage"
+    throw "$ErrorMessage"
 
 }
 
