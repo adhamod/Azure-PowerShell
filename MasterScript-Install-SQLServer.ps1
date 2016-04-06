@@ -128,6 +128,12 @@ try {
 # Verifying access to the file share VM with the installation bits for .NET Framework and SQL Server
 $codeBlock = {
 
+    param(
+
+        [string]$sqlInstallationPath,
+        [string]$DotNet35SourcePath
+    )
+
     try {
         if ( !(Test-Path -Path $sqlInstallationPath) ) {        
             throw "Error: The location of SQL Server installation bits is not accessible from target VM."
@@ -140,13 +146,17 @@ $codeBlock = {
         $ErrorMessage = $_.Exception.Message
     
         Write-Host "Verifying access to file share locations on target VM failed with error message:"
-        Write-Host "$ErrorMessage"
+        throw "$ErrorMessage"
     }
 }
 
 Write-Host "Verifying access to file share paths for software installation bits..."
 
-Invoke-Command -ComputerName $vm -Credential $cred -Authentication Credssp -ScriptBlock $codeBlock
+Invoke-Command -ComputerName $vm `
+               -Credential $cred `
+               -Authentication Credssp `
+               -ScriptBlock $codeBlock `
+               -ArgumentList $sqlInstallationPath, $DotNet35SourcePath
 
 Write-Host "Test successful: all file share paths are accessible from target VM using CredSSP authentcation."
 
