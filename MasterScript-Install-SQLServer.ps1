@@ -59,8 +59,25 @@ param (
     [String] $sqlServerSvcAcct = "CLOUD\SVCsqlserver", # SQL Server service account name
     [String] $sqlServerSvcAcctPwd = "testpassword", # SQL Server service account password
     [String] $sqlAgentSvcAcct = "CLOUD\SVCsqlagent", # SQL Agent service account name
-    [String] $sqlAgentSvcAcctPwd = 'testpassword' # SQL Agent service account password
+    [String] $sqlAgentSvcAcctPwd = 'testpassword', # SQL Agent service account password
 
+
+    #######################################
+    <# Post-SQL-Installation-Config.ps1 parameters #>
+    #######################################
+
+     # Path of the T-SQL files
+    [string] $tSQLPath,
+
+    [string] $SMTPServerName,
+    [string] $OperatorEmailAddress,
+
+    [string] $TargetDataFilesLocation = 'T:\TempDB\',
+    [string] $TargetDataSizeMB = '10000MB',
+    [string] $TargetDataFilegrowthMB = '5000MB',
+    [string] $TargetTlogFilesLocation = 'J:\TempDBLog\',
+    [string] $TargetTlogSizeMB = '5000MB',
+    [string] $TargetTlogFilegrowthMB = '1000MB'
 
 )
 
@@ -291,21 +308,28 @@ try{
 }
 
 
-<#
+
 
 ################################################
 # Run Post-SQL-Installation-Config.ps1 remotely
 ###############################################
 
+
+# First copy the T-SQL scripts to target VM
+<#
+Copies the contents of the C:\Logfiles directory to the C:\MicrosoftScripts directory of the target VM. 
+It creates the \MicrosoftScripts subdirectory if it does not already exist.
+#>
+Copy-Item $tSQLPath -Destination "\\$vm\C$\MicrosoftScripts" -Recurse
+
 try{
 
-    Write-Host "Running Install-SQLServer.ps1..."
+    Write-Host "Running Post-SQL-Installation-Config.ps1..."
 
     # Use IdleTimeout of 7,200,000 milliseconds (2 hours)
     Invoke-Command -ComputerName $vm `
                    -Credential $cred `
-                   -Authentication Credssp `
-                   -SessionOption (New-PSSessionOption -IdleTimeout 7200000) `
+                   -SessionOption (New-PSSessionOption -IdleTimeout 240000) `
                    -FilePath "$PSScriptRoot\Post-SQL-Installation-Config.ps1" `
                    -ArgumentList $sqlInstallationPath,`
                                  $LocalAdmin,`
@@ -319,7 +343,7 @@ try{
                                  $sqlAgentSvcAcct,`
                                  $sqlAgentSvcAcctPwd
                                     
-    Write-Host "Finished execution of Install-SQLServer.ps1"
+    Write-Host "Finished execution of Post-SQL-Installation-Config.ps1"
 
 } catch {
 
@@ -336,7 +360,7 @@ try{
 }
 
 
-#>
+
 
 
 ################################################
