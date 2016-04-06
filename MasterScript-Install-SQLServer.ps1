@@ -82,8 +82,11 @@ echo "`n Processing $vm"
 
 # Testing WinRM service to target VM
 try {
+    
+    Write-Host "Testing WinRM service on target VM..."
+    Test-WSMan -ComputerName $vm | Out-Null
 
-    Test-WSMan -ComputerName $vm
+    Write-Host "Test successful: WinRM service is running on target VM"
 
 } catch {
 
@@ -141,7 +144,11 @@ $codeBlock = {
     }
 }
 
-Invoke-Command -ComputerName $vm -Credential $cred -ScriptBlock $codeBlock
+Write-Host "Verifying access to file share paths for software installation bits..."
+
+Invoke-Command -ComputerName $vm -Credential $cred -Authentication Credssp -ScriptBlock $codeBlock
+
+Write-Host "Test successful: all file share paths are accessible from target VM using CredSSP authentcation."
 
 
 ################################################
