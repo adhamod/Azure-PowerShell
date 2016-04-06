@@ -77,6 +77,74 @@ echo "`n Processing $vm"
 
 
 ################################################
+# Connection settings and verifications
+###############################################
+
+# Testing WinRM service to target VM
+try {
+
+    Test-WSMan -ComputerName $vm
+
+} catch {
+
+    $ErrorMessage = $_.Exception.Message
+    
+    Write-Host "Cannot verify that the WinRM service is running on target VM. Failed with following error message:"
+    Write-Host "$ErrorMessage"
+    Write-Host "Run the ""Enable-PSRemoting"" cmdlet on target VM to enture PowerShell remoting is enabled."
+
+}
+
+<#
+Configuring current and target VM for CredSSP authentication
+
+The SQL Server installation will retrieve the SQL Server installation bits from a remote file-share server
+This will involve a double-hop authentication, which is by default not allowed using Kerberos authentication.
+Use CredSSP authentication so that the user's credentials are passed to a remote computer to be authenticated.
+    
+#>
+try {
+
+    # Enable Util server as the CredSSP Client
+    Write-Host "Setting current VM as CredSSP Client..."
+    Enable-WSManCredSSP -Role Client -DelegateComputer $vm -Force | Out-Null
+
+    # Enable the target VM as the CredSSP Server
+    Write-Host "Setting target VM as CredSSP Server..."
+    Invoke-Command -ComputerName $vm -Credential $cred -ScriptBlock { Enable-WSManCredSSP -Role Server -Force | Out-Null }
+
+} catch {
+
+    $ErrorMessage = $_.Exception.Message
+    
+    Write-Host "Configuring CredSSP authentication between current and target VM failed with error message:"
+    Write-Host "$ErrorMessage"
+
+}
+
+# Verifying access to the file share VM with the installation bits for .NET Framework and SQL Server
+$codeBlock = {
+
+    try {
+        if ( !(Test-Path -Path $sqlInstallationPath) ) {        
+            throw "Error: The location of SQL Server installation bits is not accessible from target VM."
+        }
+
+        if ( !(Test-Path -Path $DotNet35SourcePath) ) {        
+            throw "Error: The location of .NET Framework 3.5 installation bits is not accessible from target VM."
+        }
+    } catch {
+        $ErrorMessage = $_.Exception.Message
+    
+        Write-Host "Verifying access to file share locations on target VM failed with error message:"
+        Write-Host "$ErrorMessage"
+    }
+}
+
+Invoke-Command -ComputerName $vm -Credential $cred -ScriptBlock $codeBlock
+
+
+################################################
 # Run Pre-SQL-Installation-Config.ps1 remotely
 ###############################################
 
@@ -89,6 +157,9 @@ try {
                                  $SQLServerPort,`
                                  $SQLListenerPort,`
                                  $ILBProbePort
+
+    Write-Host "Finished execution of Pre-SQL-Installation-Config.ps1"
+
 } catch {
 
     $ErrorMessage = $_.Exception.Message
@@ -102,53 +173,34 @@ try {
 ################################################
 # Run Install-SQLServer.ps1 remotely
 ###############################################
-                       
+
 try{
 
     Write-Host "Running Install-SQLServer.ps1..."
 
-    # Enable Util server as the CredSSP Client
-    Enable-WSManCredSSP -Role Client -DelegateComputer $vm -Force | Out-Null
-
-    Write-Host "Set current VM as CredSSP Client"
-
-    # Enable the target VM as the CredSSP Server
-    Invoke-Command -ComputerName $vm -Credential $cred -ScriptBlock { Enable-WSManCredSSP -Role Server -Force | Out-Null }
-
-    Write-Host "Set target VM as CredSSP Server"
-
     <#
-     Run Install-SQLServer remotely
+        Run Install-SQLServer remotely
 
-     The SQL Server installation will retrieve the SQL Server installation bits from a remote file-share server
-     This will involve a double-hop authentication, which is by default not allowed using Kerberos authentication.
-     Use CredSSP authentication so that the user's credentials are passed to a remote computer to be authenticated,
-     thus avoiding 
+        The SQL Server installation will retrieve the SQL Server installation bits from a remote file-share server
+        This will involve a double-hop authentication, which is by default not allowed using Kerberos authentication.
+        Use CredSSP authentication so that the user's credentials are passed to a remote computer to be authenticated.
     
     #>
     Invoke-Command -ComputerName $vm -Credential $cred -FilePath "$PSScriptRoot\Install-SQLServer.ps1" `
-                   -Authentication Credssp `
-                   -ArgumentList $sqlInstallationPath,`
-                                 $LocalAdmin,`
-                                 $sqlServerSAPwd,`
-                                 $sqlAdminsArray,`
-                                 $sizeTempDBDataFileMB,`
-                                 $autogrowTempDBinMB,`
-                                 $UseDefaultLocalServiceAccounts,`
-                                 $sqlServerSvcAcct,`
-                                 $sqlServerSvcAcctPwd,`
-                                 $sqlAgentSvcAcct,`
-                                 $sqlAgentSvcAcctPwd
-                                
-    # Disable Util server as the CredSSP Client
-    Disable-WSManCredSSP -Role Client
-
-    Write-Host "Disabled current VM as CredSSP Client"
-
-    # Disable the target VM as the CredSSP Server
-    Invoke-Command -ComputerName $vm -Credential $cred -ScriptBlock { Disable-WSManCredSSP -Role Server }
-
-    Write-Host "Disabled target VM as CredSSP Server"
+                    -Authentication Credssp `
+                    -ArgumentList $sqlInstallationPath,`
+                                    $LocalAdmin,`
+                                    $sqlServerSAPwd,`
+                                    $sqlAdminsArray,`
+                                    $sizeTempDBDataFileMB,`
+                                    $autogrowTempDBinMB,`
+                                    $UseDefaultLocalServiceAccounts,`
+                                    $sqlServerSvcAcct,`
+                                    $sqlServerSvcAcctPwd,`
+                                    $sqlAgentSvcAcct,`
+                                    $sqlAgentSvcAcctPwd
+                                    
+    Write-Host "Finished execution of Install-SQLServer.ps1"
 
 } catch {
 
@@ -156,5 +208,31 @@ try{
     
     Write-Host "Install-SQLServer.ps1 failed with the following error message:"
     Write-Host "$ErrorMessage"
+
+}
+
+
+################################################
+# Clean-Up activities: disable CredSSP on current and target VM
+###############################################
+
+try {
+
+    # Disable Util server as the CredSSP Client
+    Write-Host "Disabling current VM as CredSSP client...."
+    Disable-WSManCredSSP -Role Client
+
+    
+
+    # Disable the target VM as the CredSSP Server
+    Write-Host "Disabling target VM as CredSSP server..."
+    Invoke-Command -ComputerName $vm -Credential $cred -ScriptBlock { Disable-WSManCredSSP -Role Server }
+
+} catch {
+
+        $ErrorMessage = $_.Exception.Message
+    
+        Write-Host "Disabling CredSSP on target and/or current VM failed with the following error message:"
+        Write-Host "$ErrorMessage"
 
 }
