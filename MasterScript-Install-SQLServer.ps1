@@ -164,7 +164,7 @@ try{
 
     Invoke-Command -ComputerName $vm `
                    -Credential $cred `
-                   -SessionOption (New-PSSessionOption -IdleTimeout 120000) ` 
+                   -SessionOption (New-PSSessionOption -IdleTimeout 120000) `
                    -ScriptBlock $codeBlock `
                    -ArgumentList $sqlInstallationPath, $DotNet35SourcePath
 
