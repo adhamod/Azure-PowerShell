@@ -76,6 +76,8 @@ $cred = Get-Credential
 echo "`n Processing $vm"
 
 
+
+
 ################################################
 # Connection settings and verifications
 ###############################################
@@ -127,6 +129,26 @@ try {
 
 }
 
+<#
+Start a persistent remote PowerShell session with the following options:
+- Use CredSSP for authentication to avoid double-hop authentication issue.
+#>
+try{
+    
+    Write-Host "Establishing remote PowerShell session..."
+    $psSession = New-PSSession -ComputerName $vm -Credential $cred -Authentication Credssp
+
+    Write-Host "Remote PowerShell session successfully established"
+
+} catch {
+    
+    $ErrorMessage = $_.Exception.Message
+    
+    Write-Host "Establishing a remote PowerShell session failed with error message:"
+    throw "$ErrorMessage"
+
+}
+
 # Verifying access to the file share VM with the installation bits for .NET Framework and SQL Server
 $codeBlock = {
 
@@ -152,15 +174,29 @@ $codeBlock = {
     }
 }
 
-Write-Host "Verifying access to file share paths for software installation bits..."
+try{
 
-Invoke-Command -ComputerName $vm `
-               -Credential $cred `
-               -Authentication Credssp `
-               -ScriptBlock $codeBlock `
-               -ArgumentList $sqlInstallationPath, $DotNet35SourcePath
+    Write-Host "Verifying access to file share paths for software installation bits..."
 
-Write-Host "Test successful: all file share paths are accessible from target VM using CredSSP authentcation."
+    Invoke-Command -Session $psSession `
+                   -ScriptBlock $codeBlock `
+                   -ArgumentList $sqlInstallationPath, $DotNet35SourcePath
+
+    Write-Host "Test successful: all file share paths are accessible from target VM using CredSSP authentcation."
+
+} catch {
+
+    $ErrorMessage = $_.Exception.Message
+    
+    Write-Host "Verifying access to file share locations on target VM failed."
+
+    Remove-PSSession -Session $psSession
+
+    Write-Host "Error message:"
+    throw "$ErrorMessage"
+}
+
+
 
 
 ################################################
@@ -171,7 +207,8 @@ try {
 
     Write-Host "Running Pre-SQL-Installation-Config.ps1..."
 
-    Invoke-Command -ComputerName $vm -Credential $cred -FilePath "$PSScriptRoot\Pre-SQL-Installation-Config.ps1" `
+    Invoke-Command -Session $psSession `
+                   -FilePath "$PSScriptRoot\Pre-SQL-Installation-Config.ps1" `
                    -ArgumentList $DotNet35SourcePath,`
                                  $SQLServerPort,`
                                  $SQLListenerPort,`
@@ -183,10 +220,16 @@ try {
 
     $ErrorMessage = $_.Exception.Message
     
-    Write-Host "Pre-SQL-Installation-Config.ps1 failed with the following error message:"
+    Write-Host "Pre-SQL-Installation-Config.ps1 failed."
+
+    Remove-PSSession -Session $psSession
+
+    Write-Host "Error message:"
     throw "$ErrorMessage"
 
 }
+
+
 
 
 ################################################
@@ -197,27 +240,19 @@ try{
 
     Write-Host "Running Install-SQLServer.ps1..."
 
-    <#
-        Run Install-SQLServer remotely
-
-        The SQL Server installation will retrieve the SQL Server installation bits from a remote file-share server
-        This will involve a double-hop authentication, which is by default not allowed using Kerberos authentication.
-        Use CredSSP authentication so that the user's credentials are passed to a remote computer to be authenticated.
-    
-    #>
-    Invoke-Command -ComputerName $vm -Credential $cred -FilePath "$PSScriptRoot\Install-SQLServer.ps1" `
-                    -Authentication Credssp `
-                    -ArgumentList $sqlInstallationPath,`
-                                    $LocalAdmin,`
-                                    $sqlServerSAPwd,`
-                                    $sqlAdminsArray,`
-                                    $sizeTempDBDataFileMB,`
-                                    $autogrowTempDBinMB,`
-                                    $UseDefaultLocalServiceAccounts,`
-                                    $sqlServerSvcAcct,`
-                                    $sqlServerSvcAcctPwd,`
-                                    $sqlAgentSvcAcct,`
-                                    $sqlAgentSvcAcctPwd
+    Invoke-Command -Session $psSession `
+                   -FilePath "$PSScriptRoot\Install-SQLServer.ps1" `
+                   -ArgumentList $sqlInstallationPath,`
+                                 $LocalAdmin,`
+                                 $sqlServerSAPwd,`
+                                 $sqlAdminsArray,`
+                                 $sizeTempDBDataFileMB,`
+                                 $autogrowTempDBinMB,`
+                                 $UseDefaultLocalServiceAccounts,`
+                                 $sqlServerSvcAcct,`
+                                 $sqlServerSvcAcctPwd,`
+                                 $sqlAgentSvcAcct,`
+                                 $sqlAgentSvcAcctPwd
                                     
     Write-Host "Finished execution of Install-SQLServer.ps1"
 
@@ -225,23 +260,42 @@ try{
 
     $ErrorMessage = $_.Exception.Message
     
-    Write-Host "Install-SQLServer.ps1 failed with the following error message:"
+    Write-Host "Install-SQLServer.ps1 failed."
+
+    Remove-PSSession -Session $psSession
+
+    Write-Host "Error message:"
     throw "$ErrorMessage"
 
 }
+
+
 
 
 ################################################
 # Clean-Up activities: disable CredSSP on current and target VM
 ###############################################
 
+
+try{
+    
+    # Close the remote PowerShell.
+    Remove-PSSession -Session $psSession
+
+} catch {
+
+    $ErrorMessage = $_.Exception.Message
+
+    Write-Host "ERROR: Closing the remote PowerShell session has failed. Ensure to not leave the PowerShell session open. Error message:"
+    throw "$ErrorMessage"
+
+}
+
 try {
 
     # Disable Util server as the CredSSP Client
     Write-Host "Disabling current VM as CredSSP client...."
     Disable-WSManCredSSP -Role Client
-
-    
 
     # Disable the target VM as the CredSSP Server
     Write-Host "Disabling target VM as CredSSP server..."
@@ -255,3 +309,5 @@ try {
     throw "$ErrorMessage"
 
 }
+
+Write-Host "SQL Server installation and configuration completed."
