@@ -280,6 +280,7 @@ try{
 try{
     
     # Close the remote PowerShell.
+    Write-Host "Closing remote PowerShell session..."
     Remove-PSSession -Session $psSession
 
 } catch {
