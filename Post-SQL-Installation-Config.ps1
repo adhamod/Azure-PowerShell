@@ -57,7 +57,7 @@ $rootFolder = "C:\MicrosoftScripts"
 
 
 ########################################
-# 10_SQL_Instance_2014_Config
+# 10_SQL_Instance_2014_Config.sql
 ########################################
 
 # Location of script
