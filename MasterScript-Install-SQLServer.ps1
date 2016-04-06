@@ -117,34 +117,18 @@ try {
     Enable-WSManCredSSP -Role Client -DelegateComputer $vm -Force | Out-Null
 
     # Enable the target VM as the CredSSP Server
+    # Use IdleTimeout of 120,000 milliseconds (2 mins)
     Write-Host "Setting target VM as CredSSP Server..."
-    Invoke-Command -ComputerName $vm -Credential $cred -ScriptBlock { Enable-WSManCredSSP -Role Server -Force | Out-Null }
+    Invoke-Command -ComputerName $vm `
+                   -Credential $cred `
+                   -SessionOption (New-PSSessionOption -IdleTimeout 120000) `
+                   -ScriptBlock { Enable-WSManCredSSP -Role Server -Force | Out-Null }
 
 } catch {
 
     $ErrorMessage = $_.Exception.Message
     
     Write-Host "Configuring CredSSP authentication between current and target VM failed with error message:"
-    throw "$ErrorMessage"
-
-}
-
-<#
-Start a persistent remote PowerShell session with the following options:
-- Use CredSSP for authentication to avoid double-hop authentication issue.
-#>
-try{
-    
-    Write-Host "Establishing remote PowerShell session..."
-    $psSession = New-PSSession -ComputerName $vm -Credential $cred -Authentication Credssp
-
-    Write-Host "Remote PowerShell session successfully established"
-
-} catch {
-    
-    $ErrorMessage = $_.Exception.Message
-    
-    Write-Host "Establishing a remote PowerShell session failed with error message:"
     throw "$ErrorMessage"
 
 }
@@ -178,7 +162,9 @@ try{
 
     Write-Host "Verifying access to file share paths for software installation bits..."
 
-    Invoke-Command -Session $psSession `
+    Invoke-Command -ComputerName $vm `
+                   -Credential $cred `
+                   -SessionOption (New-PSSessionOption -IdleTimeout 120000) ` 
                    -ScriptBlock $codeBlock `
                    -ArgumentList $sqlInstallationPath, $DotNet35SourcePath
 
@@ -207,7 +193,10 @@ try {
 
     Write-Host "Running Pre-SQL-Installation-Config.ps1..."
 
-    Invoke-Command -Session $psSession `
+    # Use IdleTimeout of 7,200,000 milliseconds (2 hours)
+    Invoke-Command -ComputerName $vm `
+                   -Credential $cred `
+                   -SessionOption (New-PSSessionOption -IdleTimeout 7200000) `
                    -FilePath "$PSScriptRoot\Pre-SQL-Installation-Config.ps1" `
                    -ArgumentList $DotNet35SourcePath,`
                                  $SQLServerPort,`
@@ -240,7 +229,10 @@ try{
 
     Write-Host "Running Install-SQLServer.ps1..."
 
-    Invoke-Command -Session $psSession `
+    # Use IdleTimeout of 7,200,000 milliseconds (2 hours)
+    Invoke-Command -ComputerName $vm `
+                   -Credential $cred `
+                   -SessionOption (New-PSSessionOption -IdleTimeout 7200000) `
                    -FilePath "$PSScriptRoot\Install-SQLServer.ps1" `
                    -ArgumentList $sqlInstallationPath,`
                                  $LocalAdmin,`
@@ -276,22 +268,6 @@ try{
 # Clean-Up activities: disable CredSSP on current and target VM
 ###############################################
 
-
-try{
-    
-    # Close the remote PowerShell.
-    Write-Host "Closing remote PowerShell session..."
-    Remove-PSSession -Session $psSession
-
-} catch {
-
-    $ErrorMessage = $_.Exception.Message
-
-    Write-Host "ERROR: Closing the remote PowerShell session has failed. Ensure to not leave the PowerShell session open. Error message:"
-    throw "$ErrorMessage"
-
-}
-
 try {
 
     # Disable Util server as the CredSSP Client
@@ -300,7 +276,10 @@ try {
 
     # Disable the target VM as the CredSSP Server
     Write-Host "Disabling target VM as CredSSP server..."
-    Invoke-Command -ComputerName $vm -Credential $cred -ScriptBlock { Disable-WSManCredSSP -Role Server }
+    Invoke-Command -ComputerName $vm `
+                   -Credential $cred `
+                   -SessionOption (New-PSSessionOption -IdleTimeout 120000) `
+                   -ScriptBlock { Disable-WSManCredSSP -Role Server }
 
 } catch {
 
