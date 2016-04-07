@@ -115,6 +115,15 @@ Write-Host "Execution of 15_SQL_TempDB_Configuration.sql completed."
 # Location of script
 $DBScriptFile = "$rootFolder\CustomJobs\0_Create_Credential_For_Backup.sql"       
 
+<#
+ HACK: All storage account keys in Azure end with two equal signs (==)
+ It appears that equal signs cannot appear in the value of parameters passed using Invoke-SQLcmd: 
+ http://stackoverflow.com/questions/35157090/escape-variable-in-sqlcmd-invoke-sqlcmd
+
+ So, the hack is to remove the two equal signs here, and append them back in the T-SQL script.
+#>
+$storageAccountKey = $storageAccountKey -replace '=',''
+
 # Build the list of parameters names and parameter values to be passed to the TSQL script
 $Param1 = "storageAccountName=" + "$storageAccountName"
 $Param2 = "storageAccountKey=" + "$storageAccountKey"
@@ -128,18 +137,18 @@ Write-Host "Execution of 0_Create_Credential_For_Backup.sql completed."
 
 
 ########################################
-# 1_Ola_MaintenanceSolution_20160180_GZ.sql
+# 1_Ola_MaintenanceSolution_20160108_GZ.sql
 ########################################
 
 # Location of script
-$DBScriptFile = "$rootFolder\CustomJobs\1_Ola_MaintenanceSolution_20160180_GZ.sql"       
+$DBScriptFile = "$rootFolder\CustomJobs\1_Ola_MaintenanceSolution_20160108_GZ.sql"       
 
-Write-Host "Executing 1_Ola_MaintenanceSolution_20160180_GZ.sql..."
+Write-Host "Executing 1_Ola_MaintenanceSolution_20160108_GZ.sql..."
 
 # This script does not require any parameters
 Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -QueryTimeout 60
 
-Write-Host "Execution of 1_Ola_MaintenanceSolution_20160180_GZ.sql completed."
+Write-Host "Execution of 1_Ola_MaintenanceSolution_20160108_GZ.sql completed."
 
 
 ########################################
