@@ -77,7 +77,11 @@ param (
     [string] $TargetDataFilegrowthMB = '5000MB',
     [string] $TargetTlogFilesLocation = 'J:\TempDBLog\',
     [string] $TargetTlogSizeMB = '5000MB',
-    [string] $TargetTlogFilegrowthMB = '1000MB'
+    [string] $TargetTlogFilegrowthMB = '1000MB',
+
+    [string] $storageAccountName,
+    [string] $storageAccountKey
+
 
 )
 
@@ -338,7 +342,10 @@ try{
                                  $TargetDataFilegrowthMB,`
                                  $TargetTlogFilesLocation,`
                                  $TargetTlogSizeMB,`
-                                 $TargetTlogFilegrowthMB
+                                 $TargetTlogFilegrowthMB,`
+                                 $storageAccountName,`
+                                 $storageAccountKey
+
                                     
     Write-Host "Finished execution of Post-SQL-Installation-Config.ps1"
 

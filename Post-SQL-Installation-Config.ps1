@@ -32,7 +32,14 @@ param (
         [string] $TargetDataFilegrowthMB = '5000MB',
         [string] $TargetTlogFilesLocation = 'J:\TempDBLog\',
         [string] $TargetTlogSizeMB = '5000MB',
-        [string] $TargetTlogFilegrowthMB = '1000MB'
+        [string] $TargetTlogFilegrowthMB = '1000MB',
+
+        #########################################
+        # Backups and Custom Jobs
+        #########################################
+        [string] $storageAccountName,
+        [string] $storageAccountKey
+
 
     )
 
@@ -70,7 +77,11 @@ $Param1 = "SMTPServerName=" + "$SMTPServerName"
 $Param2 = "OperatorEmailAddress=" + "$OperatorEmailAddress"
 $Params = $Param1, $Param2
 
-Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -Variable $Params
+Write-Host "Executing 10_SQL_Instance_2014_Config.sql..."
+
+Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -Variable $Params -QueryTimeout 120
+
+Write-Host "Execution of 10_SQL_Instance_2014_Config.sql completed."
 
 
 ########################################
@@ -90,4 +101,57 @@ $Param5 = "TargetTlogSizeMB=" + "$TargetTlogSizeMB"
 $Param6 = "TargetTlogFilegrowthMB=" + "$TargetTlogFilegrowthMB"
 $Params = $Param1, $Param2, $Param3, $Param4, $Param5, $Param6
 
-Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -Variable $Params
+Write-Host "Executing 15_SQL_TempDB_Configuration.sql..."
+
+Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -Variable $Params -QueryTimeout 420
+
+Write-Host "Execution of 15_SQL_TempDB_Configuration.sql completed."
+
+
+########################################
+# 0_Create_Credential_For_Backup.sql
+########################################
+
+# Location of script
+$DBScriptFile = "$rootFolder\CustomJobs\0_Create_Credential_For_Backup.sql"       
+
+# Build the list of parameters names and parameter values to be passed to the TSQL script
+$Param1 = "storageAccountName=" + "$storageAccountName"
+$Param2 = "storageAccountKey=" + "$storageAccountKey"
+$Params = $Param1, $Param2
+
+Write-Host "Executing 0_Create_Credential_For_Backup.sql..."
+
+Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -Variable $Params -QueryTimeout 60
+
+Write-Host "Execution of 0_Create_Credential_For_Backup.sql completed."
+
+
+########################################
+# 1_Ola_MaintenanceSolution_20160180_GZ.sql
+########################################
+
+# Location of script
+$DBScriptFile = "$rootFolder\CustomJobs\1_Ola_MaintenanceSolution_20160180_GZ.sql"       
+
+Write-Host "Executing 1_Ola_MaintenanceSolution_20160180_GZ.sql..."
+
+# This script does not require any parameters
+Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -QueryTimeout 60
+
+Write-Host "Execution of 1_Ola_MaintenanceSolution_20160180_GZ.sql completed."
+
+
+########################################
+# 2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job.sql
+########################################
+
+# Location of script
+$DBScriptFile = "$rootFolder\CustomJobs\2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job.sql"       
+
+Write-Host "Executing 2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job..."
+
+# For now, execute with no parameters
+Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -QueryTimeout 60
+
+Write-Host "Execution of 2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job completed."
