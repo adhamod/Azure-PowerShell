@@ -317,7 +317,7 @@ try{
 
 # First copy the T-SQL scripts to target VM
 <#
-Copies the contents of the C:\Logfiles directory to the C:\MicrosoftScripts directory of the target VM. 
+Copies the contents of the $tSQLPath directory to the C:\MicrosoftScripts directory of the target VM. 
 It creates the \MicrosoftScripts subdirectory if it does not already exist.
 #>
 Copy-Item $tSQLPath -Destination "\\$vm\C$\MicrosoftScripts" -Recurse
@@ -326,22 +326,19 @@ try{
 
     Write-Host "Running Post-SQL-Installation-Config.ps1..."
 
-    # Use IdleTimeout of 7,200,000 milliseconds (2 hours)
+    # Use IdleTimeout of 240,000 milliseconds (4 minutes)
     Invoke-Command -ComputerName $vm `
                    -Credential $cred `
                    -SessionOption (New-PSSessionOption -IdleTimeout 240000) `
                    -FilePath "$PSScriptRoot\Post-SQL-Installation-Config.ps1" `
-                   -ArgumentList $sqlInstallationPath,`
-                                 $LocalAdmin,`
-                                 $sqlServerSAPwd,`
-                                 $sqlAdminsArray,`
-                                 $sizeTempDBDataFileMB,`
-                                 $autogrowTempDBinMB,`
-                                 $UseDefaultLocalServiceAccounts,`
-                                 $sqlServerSvcAcct,`
-                                 $sqlServerSvcAcctPwd,`
-                                 $sqlAgentSvcAcct,`
-                                 $sqlAgentSvcAcctPwd
+                   -ArgumentList $SMTPServerName,`
+                                 $OperatorEmailAddress,`
+                                 $TargetDataFilesLocation,`
+                                 $TargetDataSizeMB,`
+                                 $TargetDataFilegrowthMB,`
+                                 $TargetTlogFilesLocation,`
+                                 $TargetTlogSizeMB,`
+                                 $TargetTlogFilegrowthMB
                                     
     Write-Host "Finished execution of Post-SQL-Installation-Config.ps1"
 
@@ -364,21 +361,13 @@ try{
 
 
 ################################################
-# Clean-Up activities: disable CredSSP on current and target VM
+# Clean-Up activities
 ###############################################
 
 try {
 
-    # Disable Util server as the CredSSP Client
-    Write-Host "Disabling current VM as CredSSP client...."
-    Disable-WSManCredSSP -Role Client
-
-    # Disable the target VM as the CredSSP Server
-    Write-Host "Disabling target VM as CredSSP server..."
-    Invoke-Command -ComputerName $vm `
-                   -Credential $cred `
-                   -SessionOption (New-PSSessionOption -IdleTimeout 120000) `
-                   -ScriptBlock { Disable-WSManCredSSP -Role Server }
+    # Disable CredSSP on both target and current VM
+    Disable-CredSSP -vm $vm -cred $cred
 
 } catch {
 
