@@ -27,7 +27,7 @@ Write-Host "Configuring SQL Server..."
 $ServerName = $env:COMPUTERNAME # Name of the local computer.
 
 # Enable certain trace flags.
-$Query = "EXEC master..sp_addsrvrolemember @loginame = N’$DomainUser’, @rolename = N’sysadmin'"
+$Query = "EXEC master..sp_addsrvrolemember @loginame = N'$DomainUser', @rolename = N'sysadmin'"
 
 # Database name on which to perform query
 $DatabaseName = "master"
