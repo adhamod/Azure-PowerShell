@@ -4,17 +4,15 @@
 	Post-SQL-Installation-Config
 	
 .DESCRIPTION 
+    Configures the SQL Server instance, configures TempDB files, sets up optimization tasks, and sets up backup jobs to an Azure storage account.
     
-
     PRECONDITION: The scripts Pre-SQL-Installation-COnfig.ps1 and 
         Install-SQLServer.ps1 have been executed successfully on this machine.
 
-  Look into this:
-  https://github.com/RamblingCookieMonster/PowerShell/blob/master/Invoke-Sqlcmd2.ps1
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: March 30, 2016
+    LASTEDIT: April 26, 2016
 #>
 
 param (
@@ -122,11 +120,11 @@ $DBScriptFile = "$rootFolder\CustomJobs\0_Create_Credential_For_Backup.sql"
 
  So, the hack is to remove the two equal signs here, and append them back in the T-SQL script.
 #>
-$storageAccountKey = $storageAccountKey -replace '=',''
+$storageAccountKey_edited = $storageAccountKey -replace '=',''
 
 # Build the list of parameters names and parameter values to be passed to the TSQL script
 $Param1 = "storageAccountName=" + "$storageAccountName"
-$Param2 = "storageAccountKey=" + "$storageAccountKey"
+$Param2 = "storageAccountKey=" + "$storageAccountKey_edited"
 $Params = $Param1, $Param2
 
 Write-Host "Executing 0_Create_Credential_For_Backup.sql..."
@@ -150,17 +148,79 @@ Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $data
 
 Write-Host "Execution of 1_Ola_MaintenanceSolution_20160108_GZ.sql completed."
 
+#######################################
+# Set environment variables to pass paramaters to SQL Server
+#######################################
+
+# Set environment variables to store the storage account name and key
+[Environment]::SetEnvironmentVariable("StorageAccount","$storageAccountName","Machine")
+[Environment]::SetEnvironmentVariable("StorageAccountKey","$storageAccountKey","Machine")
+
+Restart-Service -Name 'MSSQLSERVER' -Force
+
+# Waiting only at most 30 seconds after MSSQLSERVER restart before using Invoke-Sqlcmd restart causes 
+# the error "Lock Request Time Out Period Exceeded" to be returned.
+Write-Host "Waiting for SQL Server service to restart..."
+Start-Sleep 120
+
 
 ########################################
-# 2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job.sql
+# SQL Server Agent jobs 2-9
 ########################################
 
-# Location of script
-$DBScriptFile = "$rootFolder\CustomJobs\2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job.sql"       
+$jobFiles = @(
+                "2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job.sql",
+                "3_Create DatabaseBackup - USER_DATABASES - FULL Job.sql",
+                "4_Create DatabaseBackup - USER_DATABASES - LOG Job.sql",
+                "5_Create DatabaseIntegrityCheck - SYSTEM_DATABASES Job.sql",
+                "6_Create DatabaseIntegrityCheck - USER_DATABASES Job.sql",
+                "7_Create IndexOptimize - USER_DATABASES Job.sql",
+                "8_Create CommandLog Cleanup Job.sql",
+                "9_Create Output File Cleanup Job.sql"
+             )
 
-Write-Host "Executing 2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job..."
+foreach( $jobFile in $jobFiles ) {
 
-# For now, execute with no parameters
-Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -QueryTimeout 60
+    # Location of script
+    $DBScriptFile = "$rootFolder\CustomJobs\$jobFile"       
 
-Write-Host "Execution of 2_Create DatabaseBackup - SYSTEM_DATABASES - FULL Job completed."
+    Write-Host "Executing $jobFile..."
+
+    # Do NOT pass parameters to T-SQL script through PowerShell. The T-SQL script will read environment variables instead.
+    Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -DisableVariables
+
+    Write-Host "Execution of $jobFile completed."
+}
+
+
+########################################
+# Delete old backup jobs
+########################################
+
+$jobFiles = @(
+                "Create_Delete_Old_Full_Backups_From_BLOB_SystemDB_Job.sql",
+                "Create_Delete_Old_Full_Backups_From_BLOB_UserDB_Job.sql",
+                "Create_Delete_Old_TLog_Backups_From_BLOB_Job.sql"
+             )
+
+foreach( $jobFile in $jobFiles ) {
+
+    # Location of script
+    $DBScriptFile = "$rootFolder\DeleteOldBackupsScripts\$jobFile"       
+
+    Write-Host "Executing $jobFile..."
+
+    # Do NOT pass parameters to T-SQL script through PowerShell. The T-SQL script will read environment variables instead.
+    Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -DisableVariables
+
+    Write-Host "Execution of $jobFile completed."
+}
+
+
+#######################################
+# Clean-up activities: remove environment variables
+#######################################
+
+# Remove environment variabls
+[Environment]::SetEnvironmentVariable("StorageAccount",$null,"Machine")
+[Environment]::SetEnvironmentVariable("StorageAccountKey",$null,"Machine")

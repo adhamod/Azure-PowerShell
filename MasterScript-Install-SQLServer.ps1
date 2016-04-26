@@ -15,20 +15,20 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: April 1, 2016
+    LASTEDIT: April 26, 2016
 #>
 
 param (
 
     # FQDN of target VM
-    $vm = "targetVM.com",
+    $vm,
 
     #######################################
     <# Pre-SQL-Installation-Config.ps1 parameters #>
     #######################################
-    [String] $DotNet35SourcePath = "\\fileshareVM.com\Source\dotnet35source\sxs\",
-    [int] $SQLServerPort = 1433,
-    [int] $SQLListenerPort = 1434,
+    [String] $DotNet35SourcePath = "\\testVM.com\Source\dotnet35source\sxs\",
+    [int] $SQLServerPort = 14481,
+    [int] $SQLListenerPort = 14482,
     [int] $ILBProbePort = 59999,
 
 
@@ -36,15 +36,15 @@ param (
     <# Install-SQLServer.ps1 parameters #>
     #######################################
 
-    [String] $sqlInstallationPath = "\\fileshareVM.com\Source\SQLServer2014SP1\Setup.exe",
-    [string] $LocalAdmin = "AzrRootAdminUser",
-    [String] $sqlServerSAPwd = "testpassword", # Password for the SQL sa account for SQL authentication
+    [String] $sqlInstallationPath = "\\testVM.com\Source\SQLServer2014SP1\Setup.exe",
+    [string] $LocalAdmin,
+    [String] $sqlServerSAPwd, # Password for the SQL sa account for SQL authentication
 
     <# Array of Windows user accounts or Windows group accounts that will be added as sysadmins 
         of SQL Server instance #>  
     [string[]]
-    $sqlAdminsArray = @("CLOUD\TESTACCOUNT1",
-                        "CLOUD\TESTACCOUNT2"),
+    $sqlAdminsArray = @("domain\user 1",
+                        "domain\user 2"),
 
     [int] $sizeTempDBDataFileMB = 5000,
     [int] $autogrowTempDBinMB = 500,
@@ -67,7 +67,7 @@ param (
     #######################################
 
      # Path of the T-SQL files
-    [string] $tSQLPath,
+    [string] $tSQLPath = "C:\Users\myuser\Desktop\SQLScripts",
 
     [string] $SMTPServerName,
     [string] $OperatorEmailAddress,
@@ -79,10 +79,8 @@ param (
     [string] $TargetTlogSizeMB = '5000MB',
     [string] $TargetTlogFilegrowthMB = '1000MB',
 
-    [string] $storageAccountName,
+    [string] $storageAccountName = "azurestorageaccountname1",
     [string] $storageAccountKey
-
-
 )
 
 ################################################
@@ -319,7 +317,6 @@ try{
 ###############################################
 
 
-# First copy the T-SQL scripts to target VM
 <#
 Copies the contents of the $tSQLPath directory to the C:\MicrosoftScripts directory of the target VM. 
 It creates the \MicrosoftScripts subdirectory if it does not already exist.
@@ -362,8 +359,6 @@ try{
     throw "$ErrorMessage"
 
 }
-
-
 
 
 
