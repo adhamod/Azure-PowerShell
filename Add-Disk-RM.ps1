@@ -6,20 +6,28 @@
     [string]
     $vmName = "testVMName",
 
-    [string]
-    $diskName = "vmname-5675-1234587",
+    [string[]]
+    $diskNames = @("vmname-5675-1234587",
+                   "vmname-5675-1234588",
+                   "vmname-5675-1234589",
+                   "vmname-5675-1234590"
+                   ),
 
-    [int]
-    $diskSizeInGB = 510,
+    [int[]]
+    $diskSizesInGB = @("127",
+                       "1023",
+                       "512",
+                       "127"
+                       ),
 
     <#
       Logical Unit Number (LUN).
       Run Get-Disk (as an administrator) on target VM to see the
       Numbers already assigned to other disks.
-      Pick a LUN that is not taken.
+      Pick a starting LUN that is not taken.
     #> 
     [int]
-    $LUN = 6,
+    $startingLUN = 2,
 
     [string]
     $storageAccountName = "teststorageaccountname",
@@ -27,23 +35,38 @@
     [string]
     $storageContainerName = "vhds",
 
-    [string]
-    [ValidateSet('None','ReadOnly','ReadWrite')]
-    $cacheSetting = "None"
+    [string[]]
+    #[ValidateSet('None','ReadOnly','ReadWrite')]
+    $cacheSettings = @("ReadOnly",
+                      "ReadOnly",
+                      "None",
+                      "ReadOnly"
+                       )
 
 )
 
 # Get VM object
 $vm = Get-AzureRmVM -ResourceGroupName $resourceGroupName -Name $vmName
 
-# Add disk to VM configuration
-Add-AzureRmVMDataDisk -VM $vm `
-                      -Name $diskname `
-                      -VhdUri "https://$storageAccountName.blob.core.windows.net/$storageContainerName/$diskname.vhd" `
-                      -Caching $cacheSetting `
-                      -DiskSizeInGB $diskSizeInGB `
-                      -Lun $LUN `
-                      -CreateOption empty
+$numDisks = ($diskNames | Measure).Count
+
+for($i = 0; $i -lt $numDisks; $i++) {
+
+    # Get properties for this specific disk
+    $diskname = $diskNames[$i]
+    $diskSizeInGB = $diskSizesInGB[$i]
+    $cacheSetting = $cacheSettings[$i]
+    $LUN = $startingLUN + $i
+
+    # Add disk to VM configuration
+    Add-AzureRmVMDataDisk -VM $vm `
+                          -Name $diskname `
+                          -VhdUri "https://$storageAccountName.blob.core.windows.net/$storageContainerName/$diskname.vhd" `
+                          -Caching $cacheSetting `
+                          -DiskSizeInGB $diskSizeInGB `
+                          -Lun $LUN `
+                          -CreateOption empty
+}
 
 
 # Update disk with updated VM configuration
