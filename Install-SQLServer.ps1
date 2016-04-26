@@ -15,8 +15,8 @@
             - Nondefault locations are used for User databases, Backups, System databases, and Log files, according to
                 a company standard and SQL Server best practices.
         - Performs certain post-installation SQL Server configurations through a SQL query:
-            - Set the number of TempDB files to the number of cores of this VM, or to 8 (whichever is least)
-            - Set the size and autogrow sizes of the TempDB files
+            - Set the number of TempDB files to the number of cores of this VM, or to 8 (whichever is least) [currently disabled]
+            - Set the size and autogrow sizes of the TempDB files [currently disabled]
             - Enable certain flags
 
     PRECONDITION: The script Pre-SQL-Installation-Config.ps1 has already been successfully executed on the host machine.
@@ -65,7 +65,7 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: April 1, 2016
+    LASTEDIT: April 26, 2016
 
 #>
 
@@ -272,6 +272,7 @@ Write-Host "Running a SQL Query to configure TempDB files and enable SQL Server 
 # Enable certain trace flags.
 $Query = "DBCC TRACEON (1117, 1118, 1204, 3226, 3605, -1);"
 
+<#
 # Continue building the SQL query string. Two new lines.
 $Query += "`n `n"
 
@@ -298,6 +299,7 @@ if (   $numTempDBFiles -gt 1   ) {
         $Query += "ADD FILE (NAME = tempdev$i, FILENAME = 'T:\TempDB\tempdb$i.mdf', SIZE = $($sizeTempDBDataFileMB)MB, FILEGROWTH = $($autogrowTempDBinMB)MB);"
     }
 }
+#>
 
 # Database name on which to perform query
 $DatabaseName = "master"
