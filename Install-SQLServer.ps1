@@ -342,6 +342,11 @@ try{
     Write-Host "Restarting the SQL Server instance..."
     Restart-Service -Name 'MSSQLSERVER' -Force
 
+    <# 
+    Wait some time before executing anything on SQL Server after SQL Server restart to prevent "Lock Request Time Out Period Exceeded" error
+    #>
+    Start-Sleep 60
+
     Write-Host "SQL Server successfully installed and configured."
 
 } catch {

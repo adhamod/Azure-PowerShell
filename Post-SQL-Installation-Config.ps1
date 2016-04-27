@@ -60,7 +60,18 @@ $database = "master"
 $rootFolder = "C:\MicrosoftScripts"
 
 # Import Invoke-SqlCMD cmdlet
-Import-Module SQLPS -DisableNameChecking
+if (Test-Path -Path "E:\SQLSys\Program Files(x86)\Microsoft SQL Server\120\Tools\PowerShell\Modules\SQLPS") {
+    
+    $env:PSModulePath = $env:PSModulePath + ";E:\SQLSys\Program Files(x86)\Microsoft SQL Server\120\Tools\PowerShell\Modules"
+
+    Import-Module SQLPS -DisableNameChecking
+
+} else {
+
+    throw "Manually finding the module path for SQLPS has failed. This module is necessary to execute Invoke-SqlCmd."
+
+} 
+
 
 
 ########################################
@@ -101,7 +112,7 @@ $Params = $Param1, $Param2, $Param3, $Param4, $Param5, $Param6
 
 Write-Host "Executing 15_SQL_TempDB_Configuration.sql..."
 
-Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -Variable $Params -QueryTimeout 420
+Invoke-Sqlcmd -InputFile $DBScriptFile -ServerInstance $DBServer -Database $database -Variable $Params -QueryTimeout 900
 
 Write-Host "Execution of 15_SQL_TempDB_Configuration.sql completed."
 
@@ -161,7 +172,7 @@ Restart-Service -Name 'MSSQLSERVER' -Force
 # Waiting only at most 30 seconds after MSSQLSERVER restart before using Invoke-Sqlcmd restart causes 
 # the error "Lock Request Time Out Period Exceeded" to be returned.
 Write-Host "Waiting for SQL Server service to restart..."
-Start-Sleep 120
+Start-Sleep 180
 
 
 ########################################
