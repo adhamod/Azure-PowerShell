@@ -33,14 +33,6 @@
     The name of the subnet in which the ILB will be deployed. This subnet must be in the VNet
     specified by the $vnetName parameter.
 
-.PARAMETER networkPrefix
-    The network prefix of the subnet specified by the $subnetName parameter, in dot-decimal notation.
-    E.g. if the subnet in which VMs will be deployed, in CIDR notation, is 10.0.2.0/24, then the network prefix
-    is 10.0.2.0.
-    This script will attempt to assign the network prefix as the private IP address of the ILB. Since this IP address
-    is reserved for Azure and therefore unavailable, the DHCP server in Azure will dynamically assign the ILB an available
-    IP address in the specified subnet.
-
 .PARAMETER ilbPort
     The TCP front end and back end port of the ILB.
     Note that this script does not configure the ILB for any NAT.
@@ -74,7 +66,6 @@ param(
     $vnetResourceGroupName,
     $vnetName,
     $subnetName,
-    $networkPrefix,
 
     [int] $ilbPort = 1434,
     [int] $probePort = 59999,
@@ -106,7 +97,6 @@ $subnet = Get-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $vnet `
 ##################################
 
 $lbfe = New-AzureRmLoadBalancerFrontendIpConfig -Name "LB-Frontend" `
-                                                -PrivateIpAddress $networkPrefix `
                                                 -Subnet $subnet
 
 # Create an address pool for load balanced servers (later we add addresses to that pool) 
@@ -155,7 +145,7 @@ $lb = New-AzureRMLoadBalancer -ResourceGroupName $resourceGroupName `
 # These nics was created beforehand and was associated to working servers.
 for ($i=0; $i -lt ($nicNames | Measure).Count; $i++) {
 
-    $nic = Get-AzureRMNetworkInterface -ResourceGroupName $rg -Name $nicNames[$i]
+    $nic = Get-AzureRMNetworkInterface -ResourceGroupName $resourceGroupName -Name $nicNames[$i]
     $nic.IpConfigurations[0].LoadBalancerBackendAddressPools.Add($lb.BackendAddressPools[0]); 
     $nic | Set-AzureRMNetworkInterface 
 }
