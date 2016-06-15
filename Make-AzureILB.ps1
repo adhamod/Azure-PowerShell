@@ -128,7 +128,7 @@ else {
                                                  -Protocol TCP `
                                                  -FrontendPort $ilbPort `
                                                  -BackendPort $ilbPort `
-                                                 -Probe $healthProbe `
+                                                 -Probe $healthProbe
 }
 
  # Create the load balancer resource with all the settings previously defined 
