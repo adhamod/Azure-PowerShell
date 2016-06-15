@@ -140,6 +140,12 @@ $lb = New-AzureRMLoadBalancer -ResourceGroupName $resourceGroupName `
                               -BackendAddressPool $lbbepool `
                               -Probe $healthProbe
 
+# After the DHCP server in Azure has automatically assigned the ILB a private IP address, set the allocation
+# method of the ILB's private IP address to static
+$lb = Get-AzureRmLoadBalancer -ResourceGroupName $resourceGroupName -Name $ilbName
+$lb.FrontendIpConfigurations[0].PrivateIpAllocationMethod = "Static"
+$lb | Set-AzureRmLoadBalancer
+
 
 # Add to the pool of load balanced addresses.
 # These nics was created beforehand and was associated to working servers.
