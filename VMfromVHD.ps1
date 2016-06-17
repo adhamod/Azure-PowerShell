@@ -76,15 +76,15 @@ if ($VNet )
 }
 
 
-$VMName="hazr04011812m4"
+$VMName
 $VMNicName = $VMName+ "-Nic1"
-$VMResourceGroup= "CP-Production-XPRV2SouthCentralUSrg002"
-$VNetResourceGroup="CP-Production-XPRV2SouthCentralUSmrg"
-$VNetName="CP-Production-XPRV2SouthCentralUSevn02"
+$VMResourceGroup
+$VNetResourceGroup
+$VNetName
 $Location = "South Central US"
-$Subnet = "sn_10.74.23.0_25"
-$OSDiskURI = "https://cpxscu909a4949v2sa035.blob.core.windows.net/vhds/hazr04011812m4osdisk.vhd"
-$AvailabilitySet="AVSET-INTTECH-PRD-SC" 
+$Subnet
+$OSDiskURI
+$AvailabilitySet 
 $VMSize = "Standard_D2"
 
 #New-AzureRmAvailabilitySet -ResourceGroupName $VMResourceGroup -Name $AvailabilitySet -Location $Location
