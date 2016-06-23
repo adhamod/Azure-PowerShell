@@ -4,11 +4,11 @@
     Create-StorageAccount-SQLBackup
 
 .DESCRIPTION
-    Create a geo-redundant storage account for SQL database backups
+    Create a storage account for SQL database backups.
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: April 13, 2016
+    LASTEDIT: June 23, 2016
 #>
 
 param (
@@ -20,6 +20,9 @@ param (
     [string] $location = "East US 2",
     
     [string] $storageAccountName,
+
+    [ValidateSet('Premium_LRS','Standard_GRS','Standard_LRS','Standard_RAGRS','Standard_ZRS')]
+    [string] $storageAccountType,
 
     [string[]]
     $vmNames = @("vmName1",
@@ -38,7 +41,7 @@ if ( !($storageAccount) ) {
     New-AzureRmStorageAccount `
                             -ResourceGroupName $resourceGroupName `
                             -Name $storageAccountName `
-                            -Type Standard_GRS `
+                            -Type $storageAccountType `
                             -Location $location `
    
 }
