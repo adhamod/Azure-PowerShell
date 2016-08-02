@@ -38,30 +38,30 @@
 param (
 
     [string]
-    $subscriptionName = "Visual Studio Enterprise with MSDN",
+    $subscriptionName,
 
     [string]
-    $resourceGroupName = "powershellLearning",
+    $resourceGroupName,
 
     [string]
-    $deploymentName = "testDeploymentName",
+    $deploymentName,
 
     [string]
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
-    $location = "East US",
+    $location,
 
     [string]
-    $templateFilePath = "C:\Users\carpat\OneDrive - Microsoft\Azure-PowerShell\CharlesSchwab\storageAccount-Template.json",
+    $templateFilePath,
 
     [string]
-    $storageAccountName = "uniquestorcarlos2434",
+    $storageAccountName,
 
     [ValidateSet('Premium_LRS','Standard_GRS','Standard_LRS','Standard_RAGRS','Standard_ZRS')]
     [string]
-    $storageAccountType = 'Standard_LRS',
+    $storageAccountType,
 
     [hashtable]
-    $storageAccountTags = @{"tag1" = "tag3";"tag2" = "tag4"}
+    $storageAccountTags
 
 )
 
