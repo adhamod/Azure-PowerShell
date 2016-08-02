@@ -1,0 +1,64 @@
+﻿{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "storageAccountName": {
+        "type": "string",
+        "metadata": {
+          "description": "Name of the storage account. Must be a globally-unique value."
+        }
+      },
+      "storageAccountType": {
+        "type": "string",
+        "defaultValue": "Standard_LRS",
+        "allowedValues": [
+          "Standard_LRS",
+          "Standard_ZRS",
+          "Standard_GRS",
+          "Standard_RAGRS",
+          "Premium_LRS"
+        ]
+      },
+      "location": {
+        "type": "string",
+        "allowedValues": [
+          "Central US",
+          "East US",
+          "East US 2",
+          "West US",
+          "North Central US",
+          "South Central US",
+          "West Central US",
+          "West US 2"
+        ],
+        "metadata": {
+          "description": "The location in which to deploy this storage account."
+        }
+      },
+      "storageAccountTags": {
+        "type": "object",
+        "metadata": {
+          "description": "A hash table containing the label-value pairs with which to tag this storage account."
+        }
+      }
+    },
+    "variables": {
+    },
+    "resources": [
+      {
+        "name": "[parameters('storageAccountName')]",
+        "type": "Microsoft.Storage/storageAccounts",
+        "location": "[parameters('location')]",
+        "apiVersion": "2016-01-01",
+        "dependsOn": [ ],
+        "sku": {
+          "name": "[parameters('storageAccountType')]"
+        },
+        "kind": "Storage",
+        "tags": "[parameters('storageAccountTags')]",
+        "properties": { }
+      }
+    ],
+    "outputs": {
+    }
+}
