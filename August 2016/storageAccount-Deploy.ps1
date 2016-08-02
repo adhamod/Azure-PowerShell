@@ -36,32 +36,29 @@
 #>
 
 param (
+    
+    #######################################
+    # Azure and ARM template parameters
+    #######################################
+    [string] $subscriptionName,
+    [string] $resourceGroupName,
 
-    [string]
-    $subscriptionName,
-
-    [string]
-    $resourceGroupName,
-
-    [string]
-    $deploymentName,
-
-    [string]
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
-    $location,
+    [string] $location,
+    
+    [string] $deploymentName,
+    [string] $templateFilePath,
 
-    [string]
-    $templateFilePath,
 
-    [string]
-    $storageAccountName,
+    #######################################
+    # Storage Account parameters
+    #######################################
+    [string] $storageAccountName,
 
     [ValidateSet('Premium_LRS','Standard_GRS','Standard_LRS','Standard_RAGRS','Standard_ZRS')]
-    [string]
-    $storageAccountType,
+    [string] $storageAccountType,
 
-    [hashtable]
-    $storageAccountTags
+    [hashtable] $storageAccountTags
 
 )
 
