@@ -1,7 +1,7 @@
 ﻿<#
 
 .NAME
-	virtualNetwork-Deploy
+	expressrouteCircuit-Deploy
 	
 .DESCRIPTION 
     Leverages the ARM Template file titled "virtualNetwork-Template.json" to deploy a Virtual Network in Azure.
@@ -23,16 +23,7 @@
     The location in which to deploy this storage account.
 
 .PARAMETER templateFilePath
-    The path of the ARM template file (e.g. "C:\Users\testuser\Desktop\virtualNetwork-Template.json"
-
-.PARAMETER vnetAddressSpaces
-    The IP address space for the subnet to be used for a Virtual Network, in CIDR notation (e.g. 10.0.0.0/8).
-
-.PARAMETER primaryDnsServer
-    The IP address space of the primary DNS server to be used by this VNet.
-
-.PARAMETER secondaryDnsServer
-    The IP address space of the secondary DNS server to be used by this VNet. Optional value.
+    The path of the ARM template file (e.g. "C:\Users\testuser\Desktop\armtemplate.json"
 
 .PARAMETER subnets
     A hashtable containing the names of the subnets to be created, and their respective address spaces, in CIDR form (e.g. 10.0.0.0/24).
@@ -43,26 +34,19 @@
             - It must end with a word character or with '_'.
             - May contain word characters or '.', '-', '_'.
 
-.PARAMETER virtualNetworkTags
-    A hashtable specifying the key-value tags to be associated with this Azure resource.
-    The creation date of this resource is already automatically added as a tag.
-
 .PARAMETER createVnetGateway
-    Boolean parameter. If $true, a Virtual Network Gateway for ExpressRoute will be created using user-specified parameters.
-
-    WARNING: Creating a Virtual Network Gateway through Azure PowerShell is currently not working properly. 
-    For now, create VNet Gateways manually through the Azure portal.
-    Further info: https://social.msdn.microsoft.com/Forums/azure/en-US/f0a22ea5-6794-4670-acb8-8d18f64ba1e1/creating-new-virtual-network-gateway-for-expressroute-fails-with-error-message-internal-server?forum=WAVirtualMachinesVirtualNetwork#f0a22ea5-6794-4670-acb8-8d18f64ba1e1
+    Boolean parameter. If true, a Virtual Network Gateway for ExpressRoute will be created using user-specified parameters.
 
 .PARAMETER vnetGatewaySubnetSpace
     The IP address space for the subnet to be used for a Virtual Network Gateway, in CIDR notation (e.g. 192.168.200.0/26).
     This address space block MUST allow for at least 32 IP addresses (i.e. the subnet mask must be /27 or larger [/26, /25, etc.]).
     See: https://azure.microsoft.com/en-us/documentation/articles/expressroute-howto-add-gateway-resource-manager/
 
-.NOTES
+    Leave this variable $null if no subnet is to be created for a VNet Gateway
 
+.NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 4, 2016
+    LASTEDIT: August 2, 2016
 #>
 
 param (
@@ -73,6 +57,7 @@ param (
     [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
     [string] $resourceGroupName = "powershellLearning",
     
+
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string]$location = "East US 2",
     
@@ -90,26 +75,21 @@ param (
     [string] $secondaryDnsServer = "192.0.0.1",
 
     [hashtable] $subnets = @{"SubnetFront" = "10.2.0.0/24"; "SubnetMiddle" = "10.2.1.0/24"; "SubnetBack" = "10.2.2.0/24"},
-    [hashtable] $virtualNetworkTags = @{"Department" = "TestDepartment";"Owner" = "TestOwner"},
+    [hashtable] $virtualNetworkTags = @{"test1" = "tag1";"test2" = "tag2"},
 
     #######################################
     # Virtual Network Gateway parameters
     #######################################
 
-
-    # WARNING: Creating a Virtual Network Gateway through Azure PowerShell
-    # is currently NOT working properly. For now, create VNet Gateways
-    # manually through the Azure portal.
-    # Further info: Further info: https://social.msdn.microsoft.com/Forums/azure/en-US/f0a22ea5-6794-4670-acb8-8d18f64ba1e1/creating-new-virtual-network-gateway-for-expressroute-fails-with-error-message-internal-server?forum=WAVirtualMachinesVirtualNetwork#f0a22ea5-6794-4670-acb8-8d18f64ba1e1
-    [bool] $createVnetGateway = $false,
-
-    [string] $vnetGatewaySubnetSpace = "10.2.4.0/27",
+    [bool] $createVnetGateway = $true,
+    [string] $vnetGatewaySubnetSpace = "10.2.3.0/27",
     [string] $GatewayName = 'testGatewayName',
     [string] $GatewayIPName = 'testGatewayIPName',
     [string] $GatewayIPConfigName = 'testGatewayIPConfig',
 
     [ValidateSet("Basic", "Standard", "HighPerformance")]
     [string] $gatewaySku = 'Standard'
+
 )
 
 
@@ -213,11 +193,6 @@ if ($existingVnet) {
     Exit -2
 }
 
-
-# Get the date in which this deployment is being executed, and add it as a Tag
-$creation = Get-Date -Format MM-dd-yyyy
-$creationDate = $creation.ToString()
-$virtualNetworkTags.Add("CreationDate", $creationDate)
 #end region
 
 
@@ -295,6 +270,8 @@ Set-AzureRmVirtualNetwork -VirtualNetwork $vNet | Out-Null
 #end region
 
 
+
+
 ###################################################
 # region: Create Virtual Network (VNet) Gateway for ExpressRoute
 ###################################################
@@ -306,11 +283,10 @@ if ($createVnetGateway) {
     Write-Host "Creating Virtual Network Gateway, type 'ExpressRoute', and Sku $gatewaySku..."
     Write-Host "This operation may take up to 20 minutes."
 
-    Write-Host "Creating gateway subnet..."
-
     # Get the object of the VNet again
     $vNet = Get-AzureRmVirtualNetwork -ResourceGroupName $resourceGroupName -Name $virtualNetworkName
 
+    
     # Add a new subnet for the Gateway
     # Note the following restrictions:
     # - The name of the Gateway subnet must be 'GatewaySubnet'
@@ -323,22 +299,18 @@ if ($createVnetGateway) {
     # Get gateway subnet
     $gatewaySubnet = Get-AzureRmVirtualNetworkSubnetConfig -Name 'GatewaySubnet' -VirtualNetwork $vnet
 
-    Write-Host "Creating public IP address for the gateway..."
+    Write-Host "Gateway subnet created"
 
     # Request a public IP address for the gateway
     # The IP address must be dynamically allocated
-    $pip = New-AzureRmPublicIpAddress -Name $GatewayIPName `
-                                      -ResourceGroupName $resourceGroupName `
-                                      -Location $location `
-                                      -AllocationMethod Dynamic `
-                                      -WarningAction SilentlyContinue
+    $pip = New-AzureRmPublicIpAddress -Name $GatewayIPName -ResourceGroupName $resourceGroupName -Location $location -AllocationMethod Dynamic
 
-    Write-Host "Creating IP configuration for gateway..."
+    Write-Host "Public IP address created"
 
     # Create the gateway configuration, which specifies public IP and subnet to use
     $GatewayIPConfig = New-AzureRmVirtualNetworkGatewayIpConfig -Name $GatewayIPConfigName -Subnet $gatewaySubnet -PublicIpAddress $pip
 
-    Write-Host "Creating VNet gateway...."
+    Write-Host "Gateway IP Config created"
 
     # Create the gateway
     New-AzureRmVirtualNetworkGateway -Name $GatewayName `
@@ -346,9 +318,12 @@ if ($createVnetGateway) {
                                      -Location $location `
                                      -IpConfigurations $GatewayIPConfig `
                                      -GatewayType ExpressRoute `
-                                     -GatewaySku $gatewaySku `
-                                     -WarningAction SilentlyContinue
+                                     -GatewaySku $gatewaySku
  }
 #end region
+
+
+
+
 
 Write-Host "Virtual Network deployment has completed successfully."

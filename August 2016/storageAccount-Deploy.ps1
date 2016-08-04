@@ -19,7 +19,7 @@
     The location in which to deploy this storage account.
 
 .PARAMETER templateFilePath
-    The path of the ARM template file (e.g. "C:\Users\testuser\Desktop\armtemplate.json"
+    The path of the ARM template file (e.g. "C:\Users\testuser\Desktop\storageAccount-Template.json"
 
 .PARAMETER storageAccountName
 	The name of the storage account to be deployed. Must be globally unique.
@@ -29,10 +29,11 @@
 
 .PARAMETER storageAccountTags
     A hashtable specifying the key-value tags to be associated with this Azure resource.
+    The creation date of this resource is already automatically added as a tag.
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 2, 2016
+    LASTEDIT: August 4, 2016
 #>
 
 param (
@@ -40,25 +41,25 @@ param (
     #######################################
     # Azure and ARM template parameters
     #######################################
-    [string] $subscriptionName,
-    [string] $resourceGroupName,
+    [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
+    [string] $resourceGroupName = "powershellLearning",
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
-    [string] $location,
+    [string] $location = 'East US 2',
     
-    [string] $deploymentName,
-    [string] $templateFilePath,
+    [string] $deploymentName = 'testdeployment1',
+    [string] $templateFilePath = "C:\Users\carpat\OneDrive - Microsoft\Azure-PowerShell\August 2016\storageAccount-Template.json",
 
 
     #######################################
     # Storage Account parameters
     #######################################
-    [string] $storageAccountName,
+    [string] $storageAccountName = 'teststorcarlos573',
 
     [ValidateSet('Premium_LRS','Standard_GRS','Standard_LRS','Standard_RAGRS','Standard_ZRS')]
-    [string] $storageAccountType,
+    [string] $storageAccountType = 'Standard_LRS',
 
-    [hashtable] $storageAccountTags
+    [hashtable] $storageAccountTags = @{"Department" = "TestDepartment";"Owner" = "TestOwner"}
 
 )
 
@@ -148,6 +149,11 @@ if ($storageNameAvailability.NameAvailable -eq $false) {
     Write-Host "$($storageNameAvailability.Message)" -BackgroundColor Black -ForegroundColor Red
     Exit -2
 }
+
+# Get the date in which this deployment is being executed, and add it as a Tag
+$creation = Get-Date -Format MM-dd-yyyy
+$creationDate = $creation.ToString()
+$storageAccountTags.Add("CreationDate", $creationDate)
 #end region
 
 
