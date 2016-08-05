@@ -68,6 +68,26 @@
     $virtualMachineBaseName must be 13 characters or less to accomodate indexing
     and the maximum VM name of 15 characters, as set by Azure.
     
+.PARAMETER numberVmsToDeploy
+    The number of identical VMs to deploy.
+
+.PARAMETER osName
+    Name of the operating system to install on the VM.
+    For Windows Server 2012 R2, set value to 'W2K12R2'
+
+.PARAMETER vmSize
+    Size of the VM to deploy. E.g. "Standard_A1"
+    Use the cmdlet Get-AzureRmVMSize to get the list of VM sizes.
+
+.PARAMETER username
+    Name of the user for the local administrator account of the VM.
+
+.PARAMETER password
+    Password of the local administrator account of the VM.
+    If left blank or $null, a random password will be generated and outputted to the console.
+
+.PARAMETER vmTags
+    Tags to be applied to the NICs and VMs to be deployed.
 
 .NOTES
     AUTHOR: Carlos Patiño
@@ -116,7 +136,7 @@ param (
 
     [string] $vmResourceGroupName,
     [string] $virtualMachineBaseName = 'vmNametest',
-    [int] $numberVmsToDeploy = ,
+    [int] $numberVmsToDeploy = 2,
 
     [ValidateSet("W2K12R2", "Centos71")]
     [string] $osName = "W2K12R2",
