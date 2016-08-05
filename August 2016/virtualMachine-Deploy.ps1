@@ -9,14 +9,65 @@
 .PARAMETER subscriptionName
 	Name of the subscription in which to deploy the ARM template.
 
-.PARAMETER resourceGroupName
-    Name of the resource group in which to deploy the ARM template.
-
 .PARAMETER deploymentName
     Name of the ARM template deployment. This name is only useful for debugging purposes, and can be set to anything.
 
 .PARAMETER location
-    The location in which to deploy this storage account.
+    The location in which to deploy these VMs.
+
+.PAMAMETER vnetResourceGroupName
+    The resource group name in which the Virtual Network is located.
+
+.PAMAMETER virtualNetworkName
+    The name of the virtual network in which to deploy the VMs.
+
+.PARAMETER subnetName
+    The name of the subnet in which to deploy VMs.
+
+.PARAMETER availabilitySetName
+    The name of the availability set in which to deploy VMs.
+
+    If an availability set by the selected name does not already exist,
+    one will be created.
+
+    If left blank or $null, VMs will NOT be placed in an availability set.
+
+    Note that VMs may only be placed in an availability set at the time of provisioning.
+
+.PARAMETER storageAccountName
+    Name of the storage account in which to place the OS disks and data disks of the VMs
+    to be provisioned.
+
+    The name of the storage account must be globally unique.
+
+    This script currently assumes that the storage account is in the same resource group
+    as the VMs to be provisioned.
+
+.PARAMETER numberDataDisks
+    The number of data disks to be provisioned and assigned to each VM. May be set to 0.
+
+    This script currently only provisions standard data disks.
+
+.PARAMETER sizeDataDisksGiB
+    The size of the data disks to be provisioned, in gibibyte (GiB)
+
+    May be ignored if no data disks are to be provisioned.
+
+.PARAMETER vmResourceGroupName
+    The name of the resource group in which to deploy VMs and their respective NICs.
+
+.PARAMETER virtualMachineBaseName
+    Base name of the VMs to be deployed, before indexing.
+
+    Example: if $virtualMachineBaseName = 'testVMName' and the number
+    of VMs to be deployed is 3, the names of the VMs to be deployed will be:
+    - testVMName01
+    - testVMName02
+    - testVMName03
+
+    $virtualMachineBaseName must be 13 characters or less to accomodate indexing
+    and the maximum VM name of 15 characters, as set by Azure.
+    
 
 .NOTES
     AUTHOR: Carlos Patiño
@@ -38,7 +89,7 @@ param (
     #######################################
     # Virtual Network parameters
     #######################################
-    [string] $vnetResourceGroupName = "powershellLearning",
+    [string] $vnetResourceGroupName,
     [string] $virtualNetworkName = "testVNet1",
     [string] $subnetName = 'SubnetFront',
 
@@ -47,15 +98,15 @@ param (
     # Availability Set parameters
     #######################################
     [Parameter(Mandatory=$false)]
-    [string] $availabilitySetName = 'testAvailabilitySet2',
+    [string] $availabilitySetName = 'testAvailabilitySet1',
     
 
     #######################################
     # Disk and storage parameters
     #######################################
 
-    [string] $storageAccountName = "teststorage57385",
-    [int] $numberDataDisks = 2,
+    [string] $storageAccountName,
+    [int] $numberDataDisks = 1,
     [int] $sizeDataDisksGiB = 100,
 
 
@@ -63,9 +114,9 @@ param (
     # VM parameters
     #######################################
 
-    [string] $vmResourceGroupName = "powershellLearning",
+    [string] $vmResourceGroupName,
     [string] $virtualMachineBaseName = 'vmNametest',
-    [int] $numberVmsToDeploy = 3,
+    [int] $numberVmsToDeploy = ,
 
     [ValidateSet("W2K12R2", "Centos71")]
     [string] $osName = "W2K12R2",
@@ -271,7 +322,7 @@ if ($availabilitySetName) {
 if ($virtualMachineBaseName.Length -gt 13) {
 
     Write-Host "Ensure that the base name of the VM is 13 characters or less." -BackgroundColor Black -ForegroundColor Red
-    Write-Host "Since the maximum length of a VM name is 15 characters, this requirements allow for two characters for the indexing of the VM name (e.g. 'baseVMName01', 'baseVMName02')." -BackgroundColor Black -ForegroundColor Red
+    Write-Host "Since the maximum length of a VM name is 15 characters, this requirements allow for two characters for the indexing of the VM name (e.g. 'baseVMName01', 'baseVMName15')." -BackgroundColor Black -ForegroundColor Red
     Exit -2
 
 }
@@ -378,7 +429,7 @@ $armTemplate = @{
         @{
             apiVersion = "2015-06-15"
             type = "Microsoft.Network/networkInterfaces"
-            name = "[concat('" + $virtualMachineBaseName + "', copyindex($offset), 'nic1')]"
+            name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'nic1')]"
             location = $location
             tags = $vmTags
             copy = @{
@@ -402,7 +453,7 @@ $armTemplate = @{
         @{
             apiVersion = "2015-06-15"
             type = "Microsoft.Compute/virtualMachines"
-            name = "[concat('" + $virtualMachineBaseName + "', copyIndex($offset))]"
+            name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'))]"
             location = $location
             tags = $vmTags
             copy = @{
@@ -410,14 +461,14 @@ $armTemplate = @{
                 count = "[parameters('numberOfInstances')]"
             }
             dependsOn = @(
-                "[concat('Microsoft.Network/networkInterfaces/', '" + $virtualMachineBaseName + "', copyindex($offset), 'nic1')]"
+                "[concat('Microsoft.Network/networkInterfaces/', '" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'nic1')]"
             )
             properties = @{
                 hardwareProfile = @{
                    vmSize = $vmSize
                 }
                 osProfile = @{
-                    computername = "[concat('" + $virtualMachineBaseName + "', copyIndex($offset))]"
+                    computername = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'))]"
                     adminUsername = $username
                     adminPassword = "[parameters('adminPassword')]"
                 }
@@ -429,18 +480,18 @@ $armTemplate = @{
                         version = "latest"
                     }
                     osDisk = @{
-                        name = "[concat('" + $virtualMachineBaseName + "', copyIndex($offset), 'osdisk')]"
+                        name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk')]"
                         caching = "ReadWrite"
                         createOption = "FromImage"
                         vhd = @{
-                            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', copyIndex($offset), 'osdisk.vhd')]"
+                            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk.vhd')]"
                         }
                     }
                 }
                 networkProfile = @{
                     networkInterfaces = @(
                         @{
-                            id = "[resourceId('Microsoft.Network/networkInterfaces',concat('" + $virtualMachineBaseName + "', copyindex($offset), 'nic1'))]"
+                            id = "[resourceId('Microsoft.Network/networkInterfaces',concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'nic1'))]"
                         }
                     )
                 }
@@ -494,11 +545,11 @@ for ($i = 1; $i -le $numberDataDisks; $i++){
     }
 
     $armTemplate['resources'][$vmindex]['properties']['storageprofile']['dataDisks'] += @{
-        name = "[concat('" + $virtualMachineBaseName + "', copyindex($offset), 'datadisk$i')]"
+        name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'datadisk$i')]"
         diskSizeGB = $sizeDataDisksGiB
         lun = $i - 1
         vhd = @{
-            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', copyindex($offset), 'datadisk$i.vhd')]"
+            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'datadisk$i.vhd')]"
         }
         createOption = "Empty"
     }
@@ -507,8 +558,8 @@ for ($i = 1; $i -le $numberDataDisks; $i++){
 # Set output
 $armTemplate['outputs'] = @{}
 foreach ($i in $offset..$numberVmsToDeploy){
-    $outputvmname = $virtualMachineBaseName + $i
-    $outputnicname = $virtualMachineBaseName + $i + 'nic1'
+    $outputvmname = $virtualMachineBaseName + $i.ToString("00")
+    $outputnicname = $virtualMachineBaseName + $i.ToString("00") + 'nic1'
     $armTemplate['outputs'][$outputvmname] = @{
         type = "object"
         value = "[reference('Microsoft.Compute/virtualMachines/" + $outputvmname + "' , '2015-06-15')]"

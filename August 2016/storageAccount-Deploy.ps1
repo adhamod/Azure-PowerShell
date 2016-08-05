@@ -42,7 +42,7 @@ param (
     # Azure and ARM template parameters
     #######################################
     [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
-    [string] $resourceGroupName,
+    [string] $resourceGroupName ,
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string] $location = 'East US 2',
@@ -57,7 +57,7 @@ param (
     [string] $storageAccountName,
 
     [ValidateSet('Premium_LRS','Standard_GRS','Standard_LRS','Standard_RAGRS','Standard_ZRS')]
-    [string] $storageAccountType,
+    [string] $storageAccountType = 'Standard_LRS',
 
     [hashtable] $storageAccountTags = @{"Department" = "TestDepartment";"Owner" = "TestOwner"}
 
