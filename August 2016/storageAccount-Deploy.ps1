@@ -41,23 +41,23 @@ param (
     #######################################
     # Azure and ARM template parameters
     #######################################
-    [string] $subscriptionName,
+    [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
     [string] $resourceGroupName,
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string] $location = 'East US 2',
     
-    [string] $deploymentName = 'testdeployment1',
+    [string] $deploymentName = "testdeployment3",
     [string] $templateFilePath,
 
 
     #######################################
     # Storage Account parameters
     #######################################
-    [string] $storageAccountName = 'teststorcarlos573',
+    [string] $storageAccountName,
 
     [ValidateSet('Premium_LRS','Standard_GRS','Standard_LRS','Standard_RAGRS','Standard_ZRS')]
-    [string] $storageAccountType = 'Standard_LRS',
+    [string] $storageAccountType,
 
     [hashtable] $storageAccountTags = @{"Department" = "TestDepartment";"Owner" = "TestOwner"}
 
