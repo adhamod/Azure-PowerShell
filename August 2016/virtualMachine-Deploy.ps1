@@ -105,7 +105,7 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 5, 2016
+    LASTEDIT: August 8, 2016
 #>
 
 param (
@@ -132,14 +132,14 @@ param (
     # Availability Set parameters
     #######################################
     [Parameter(Mandatory=$false)]
-    [string] $availabilitySetName = 'testAvailabilitySet2',
+    [string] $availabilitySetName = 'testAvailabilitySet1',
     
 
     #######################################
     # Disk and storage parameters
     #######################################
 
-    [string] $storageAccountName = "powershelllearning8059",
+    [string] $storageAccountName,
     [int] $numberDataDisks = 0,
     [int] $sizeDataDisksGiB = 100,
 
@@ -148,14 +148,14 @@ param (
     # VM parameters
     #######################################
 
-    [string] $vmResourceGroupName = "powershellLearning",
-    [string] $virtualMachineBaseName = 'vmJasonTest',
+    [string] $vmResourceGroupName,
+    [string] $virtualMachineBaseName = 'vmTestName',
     [int] $numberVmsToDeploy = 2,
 
-    [bool] $createFromCustomImage = $true,
+    [bool] $createFromCustomImage = $false,
 
     [Parameter(Mandatory=$false)]
-    [string] $osDiskUrl = "https://powershelllearning8059.blob.core.windows.net/customimages/VMBaseImage2016613184610.vhd",
+    [string] $osDiskUrl,
 
     [bool] $publicIPAddress = $false,
 
