@@ -71,6 +71,20 @@
 .PARAMETER numberVmsToDeploy
     The number of identical VMs to deploy.
 
+.PARAMETER publicIPAddress
+    If $true, add a public IP address to the NIC of the VM to deploy.
+    The public IP address will be dynamically allocated.
+
+.PARAMETER createFromCustomImage
+    If $true, the VM will be provisioned from a user-uploaded custom image.
+    The VHD holding this custom image will be specified by $osDiskUrl
+
+.PARAMETER osDiskUrl
+    The URL of the VHD holding he user-uploaded custom image from which to provision VMs.
+    This parameter is only required if $createFromCustomImage = $true.
+    The storage account in which this VHD is located must be the same as the storage account
+    in which the VM OS disks will be created.
+
 .PARAMETER osName
     Name of the operating system to install on the VM.
     For Windows Server 2012 R2, set value to 'W2K12R2'
@@ -100,7 +114,7 @@ param (
     # Azure and ARM template parameters
     #######################################
     [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
-    [string] $deploymentName = "testdeployment3",
+    [string] $deploymentName = "testdeployment5",
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string] $location = "East US 2",
@@ -109,7 +123,7 @@ param (
     #######################################
     # Virtual Network parameters
     #######################################
-    [string] $vnetResourceGroupName,
+    [string] $vnetResourceGroupName = "powershellLearning",
     [string] $virtualNetworkName = "testVNet1",
     [string] $subnetName = 'SubnetFront',
 
@@ -118,15 +132,15 @@ param (
     # Availability Set parameters
     #######################################
     [Parameter(Mandatory=$false)]
-    [string] $availabilitySetName = 'testAvailabilitySet1',
+    [string] $availabilitySetName = 'testAvailabilitySet2',
     
 
     #######################################
     # Disk and storage parameters
     #######################################
 
-    [string] $storageAccountName,
-    [int] $numberDataDisks = 1,
+    [string] $storageAccountName = "powershelllearning8059",
+    [int] $numberDataDisks = 0,
     [int] $sizeDataDisksGiB = 100,
 
 
@@ -134,9 +148,16 @@ param (
     # VM parameters
     #######################################
 
-    [string] $vmResourceGroupName,
-    [string] $virtualMachineBaseName = 'vmNametest',
+    [string] $vmResourceGroupName = "powershellLearning",
+    [string] $virtualMachineBaseName = 'vmJasonTest',
     [int] $numberVmsToDeploy = 2,
+
+    [bool] $createFromCustomImage = $true,
+
+    [Parameter(Mandatory=$false)]
+    [string] $osDiskUrl = "https://powershelllearning8059.blob.core.windows.net/customimages/VMBaseImage2016613184610.vhd",
+
+    [bool] $publicIPAddress = $false,
 
     [ValidateSet("W2K12R2", "Centos71")]
     [string] $osName = "W2K12R2",
@@ -321,7 +342,7 @@ if ($existingStorageAccount.Sku.Tier -ne 'Standard') {
 
 # If an availability set is required, AND the availability set already exists, verify that the size of the selected VM can be deployed in the existing availability set
 if ($availabilitySetName) {
-    $existingAvailabilitySet = Get-AzureRmAvailabilitySet -ResourceGroupName $vmResourceGroupName -ErrorAction SilentlyContinue
+    $existingAvailabilitySet = Get-AzureRmAvailabilitySet -ResourceGroupName $vmResourceGroupName -AvailabilitySetName $availabilitySetName -ErrorAction SilentlyContinue
     if ($existingAvailabilitySet) {
 
         # Gets available sizes for virtual machines that you can deploy in the availability set
@@ -407,6 +428,18 @@ if ($image -eq $null) {
 
     Write-Host "The selected Operating System type $osName is not valid." -BackgroundColor Black -ForegroundColor Red
     Exit -2
+}
+
+# If VM is being deployed from a user-uploaded custom image, validate that the VHD containing the generalized image is
+# in the same storage account as the storage account in which the VMs disks will be deployed
+if ($createFromCustomImage) {
+
+    if( !($osDiskUrl) ) {
+        Write-Host "If you are selecting to create a VM from a user-uploaded custom image, please specify the URL for the VHD containing the custom image." -BackgroundColor Black -ForegroundColor Red
+        Write-Host "Note that the image VHD must be in the same storage account as the storage account in which the VM disks will be deployed." -BackgroundColor Black -ForegroundColor Red
+        Exit -2
+    }
+    ## TODO
 }
 #end region
 
@@ -520,7 +553,6 @@ $armTemplate = @{
     )
 }
 
-
 # Ensure that the index to navigate JSON document is accurate
 if ($armTemplate.resources[0].type -eq "Microsoft.Compute/virtualMachines"){
     $vmindex = 0
@@ -529,6 +561,93 @@ if ($armTemplate.resources[0].type -eq "Microsoft.Compute/virtualMachines"){
 else{
     $vmindex = 1
     $nicindex = 0
+}
+
+# Modify storage profile of the VM depending on whether VM is created from a standard gallery image or from a user-uploaded custom image
+if ($createFromCustomImage = $true) {
+
+    $armTemplate['resources'][$vmindex]['properties']['storageProfile'] = @{
+                            osDisk = @{
+                                name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk')]"
+                                osType = $image.OSFlavor
+                                caching = "ReadWrite"
+                                createOption = "FromImage"
+                                image =  @{
+                                  uri = $osDiskUrl
+                                }
+                                vhd = @{
+                                  uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk.vhd')]"
+                                }
+                            }
+    }
+                 
+} else {
+
+    # Storage Profile if creating VM from gallery (i.e. standard) image
+    $armTemplate['resources'][$vmindex]['properties']['storageProfile'] = @{
+                    imageReference = @{
+                        publisher = $image.Publisher
+                        offer = $image.Offer
+                        sku = $image.Sku
+                        version = "latest"
+                    }
+                    osDisk = @{
+                        name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk')]"
+                        caching = "ReadWrite"
+                        createOption = "FromImage"
+                        vhd = @{
+                            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk.vhd')]"
+                        }
+                    }
+    }
+
+}
+
+
+
+
+# Adding public IP address
+if ($publicIPAddress -eq $true) {
+    Write-Host "Adding public IP address..."
+
+    # Add public IP as a dependency of the NIC
+    if ($armTemplate['resources'][$nicindex]['dependsOn'] -eq $null){
+        Write-Host "enter first"
+        $armTemplate['resources'][$nicindex]['dependsOn'] = @()
+    }
+    $armTemplate['resources'][$nicindex]['dependsOn'] += "[concat('Microsoft.Network/publicIPAddresses/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'ip1')]"
+
+    # Associate the public IP address with its respective NIC
+    $armTemplate['resources'][$nicindex]['properties']['ipConfigurations'][0]['properties']['publicIPAddress'] = @{
+        id = "[resourceId('Microsoft.Network/publicIPAddresses',concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'),'ip1'))]"
+    }
+
+    # Add public IP address resource to ARM template
+    $armTemplate['resources'] += @{
+        apiVersion = "2015-06-15"
+        name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'ip1')]"
+        type = "Microsoft.Network/publicIPAddresses"
+        location = $location
+        tags = $vmTags
+        properties = @{
+            publicIPAllocationMethod = "Dynamic"
+        }
+        copy = @{
+                name = "publicIPLoop"
+                count = "[parameters('numberOfInstances')]"
+        }
+    }
+}
+
+# After any possible changes to the indexes after possibly adding IP addresses, recalculate for VM index
+if ($armTemplate.resources[0].type -eq "Microsoft.Compute/virtualMachines"){
+    $vmindex = 0
+}
+elseif ($armTemplate.resources[1].type -eq "Microsoft.Compute/virtualMachines"){
+    $vmindex = 1
+}
+else {
+    $vmindex = 2
 }
 
 
@@ -553,7 +672,7 @@ if ($availabilitySetName -ne $null){
     }
 }
 
-# Adding data disks
+# Adding data disks. Currently these disks are created from scratch (i.e. not from an image)
 for ($i = 1; $i -le $numberDataDisks; $i++){
     Write-Host "Adding Data Disk $i"
 
