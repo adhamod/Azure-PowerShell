@@ -108,13 +108,17 @@
 
 .PARAMETER createFromCustomImage
     If $true, the VM will be provisioned from a user-uploaded custom image.
-    The VHD holding this custom image will be specified by $osDiskUrl
+    The VHD holding this custom image will be specified by $imageUrl
 
-.PARAMETER osDiskUrl
+.PARAMETER imageUrl
     The URL of the VHD holding he user-uploaded custom image from which to provision VMs.
     This parameter is only required if $createFromCustomImage = $true.
+
     The storage account in which this VHD is located must be the same as the storage account
-    in which the VM OS disks will be created.
+    in which the VM OS disks will be created. If it is not, this script will begin a copy operation
+    to copy the VHD from its original storage account to all target storage accounts.
+
+    E.g. $imageUrl = "https://teststorageaccount.blob.core.windows.net/customimages/vmbaseimage123.vhd"
 
 .PARAMETER osName
     Name of the operating system to install on the VM.
@@ -160,7 +164,7 @@ param (
     # Virtual Network parameters
     #######################################
     [string] $vnetResourceGroupName,
-    [string] $virtualNetworkName = "testVNet1",
+    [string] $virtualNetworkName,
     [string] $subnetName = 'SubnetFront',
 
 
@@ -172,7 +176,7 @@ param (
     [string] $storageAccountName,
 
     [string] $storageAccountBaseName,
-    [int] $storageAccountStartIndex,
+    [int] $storageAccountStartIndex = 1,
 
     [int] $numberDataDisks = 0,
     [int] $sizeDataDisksGiB = 100,
@@ -183,12 +187,12 @@ param (
 
     [string] $vmResourceGroupName,
     [string] $virtualMachineBaseName,
-    [int] $numberVmsToDeploy,
+    [int] $numberVmsToDeploy = 2,
 
-    [bool] $createFromCustomImage = $false,
+    [bool] $createFromCustomImage = $true,
 
     [Parameter(Mandatory=$false)]
-    [string] $osDiskUrl,
+    [string] $imageUrl,
 
     [bool] $publicIPAddress = $false,
 
@@ -225,6 +229,10 @@ $maxDisksStorageAccountStandard = 40
 
 # Define the storage account container in which to place all VM disks
 $storageContainerName = 'vhds'
+
+# Define the storage account container in which to copy any custom images whose
+# original location is not the storage account in which VM disks will be deployed
+$imageContainerName = 'customimages'
 
 # Define the maximum allowable size of an Azure data disk, in GiB
 $maxDiskSizeGiB = 1023
@@ -360,6 +368,9 @@ if ($existingSubnet -eq $null) {
 
 # Validate that the storage account already exist(s)
 if ( [string]::IsNullOrEmpty($availabilitySetName) ) {
+
+    Write-Host "Attempting to deploy $numberVmsToDeploy VMs that will NOT be part of an availability set."
+    Write-Host "Using storage account: $storageAccountName"
     
     # If the VM(s) to be created will NOT be placed in an availability group, all of the VM(s) disk(s) will be placed in the same storage account.
     $existingStorageAccounts = @($null)
@@ -373,8 +384,18 @@ if ( [string]::IsNullOrEmpty($availabilitySetName) ) {
 } else {
 
     # If the VM(s) to be created WILL be placed in an availability group, each VMs' disks will be placed in a separate storage account
+
     Write-Host "Attempting to deploy $numberVmsToDeploy VMs in the availability set $availabilitySetName."
-    Write-Host "Using base storage account name $storageAccountBaseName and starting index for storage account name $storageAccountStartIndex."
+    Write-Host "Using the following storage accounts:"
+    $j = $storageAccountStartIndex
+    for ($i = 0; $i -lt $numberVmsToDeploy;$i++) {
+
+        # Get the expected storage account name
+        $tempStorageAccountName = $storageAccountBaseName + $j.ToString("00")
+        $j++
+
+        Write-Host "$tempStorageAccountName"
+    }
 
     # Initialize array to hold all expected storage accounts
     $existingStorageAccounts = @($null)*$numberVmsToDeploy
@@ -393,7 +414,6 @@ if ( [string]::IsNullOrEmpty($availabilitySetName) ) {
         
         # Throw an error if the expected storage account does not exist
         if ($existingStorageAccounts[$i] -eq $null) {
-            
             
             Write-Host "A storage account with the name $tempStorageAccountName was not found in the resource group $vmResourceGroupName." -BackgroundColor Black -ForegroundColor Red
             Exit -2
@@ -522,12 +542,136 @@ if ($image -eq $null) {
 # in the same storage account as the storage account in which the VMs disks will be deployed
 if ($createFromCustomImage) {
 
-    if( !($osDiskUrl) ) {
+    Write-Host "Ensuring that image VHD is located in the same storage account as the target storage accounts for VM deployment..."
+
+    # Check that user specified a value for the image URL
+    if( [string]::IsNullOrEmpty($imageUrl) ) {
         Write-Host "If you are selecting to create a VM from a user-uploaded custom image, please specify the URL for the VHD containing the custom image." -BackgroundColor Black -ForegroundColor Red
         Write-Host "Note that the image VHD must be in the same storage account as the storage account in which the VM disks will be deployed." -BackgroundColor Black -ForegroundColor Red
         Exit -2
     }
-    ## TODO
+    
+    # Extract storage account in which VHD is located.
+    # Method: extract any string in between "//" and ".blob"
+    $imageStorageAccountName = [regex]::Match($imageUrl,"(?<=\/\/)(.*?)(?=\.blob)").Value
+
+    # Extract the name of the VHD in which the image is stored
+    # Match everything after the last "/"
+    $imageName = [regex]::Match($imageUrl,"(?<=\/)[^/]*$").Value
+    
+    # Verify that the storage account in which the image is located (1) exists and (2)
+    # is accessible using current Azure credentials
+    $imageStorageAccount = Get-AzureRmStorageAccount | Where-Object {$_.StorageAccountName -eq $imageStorageAccountName}
+    if ($imageStorageAccount -eq $null) {
+            
+        Write-Host "The URL that you specified for the custom image VHD is: $imageUrl." -BackgroundColor Black -ForegroundColor Red
+        Write-Host "The storage account with the name $imageStorageAccountName was not found in subscription $subscriptionName." -BackgroundColor Black -ForegroundColor Red
+        Exit -2
+    }
+
+    # Get the context of the origin storage account
+    $pwImage = Get-AzureRmStorageAccountKey -ResourceGroupName $imageStorageAccount.ResourceGroupName -Name $imageStorageAccount.StorageAccountName
+    $contextImage = New-AzureStorageContext -StorageAccountName $imageStorageAccount.StorageAccountName -StorageAccountKey $pwImage.Value[0] -Protocol Https
+
+    # Intialize counter to hold number of copy operations required
+    $numberCopyJobs = 0
+
+    # Initialize an array to hold storage account contexts
+    $contexts = @()
+
+    # Loop through each storage account to be used
+    # For each storage account, check that the image exists in the pre-defined container
+    # for images (i.e. $imageContainerName)
+    # If it does not exist, start a copy job
+    foreach ($existingStorageAccount in $existingStorageAccounts) {
+        
+        # Get the context of the current storage account
+        $pw = Get-AzureRmStorageAccountKey -ResourceGroupName $vmResourceGroupName -Name $existingStorageAccount.StorageAccountName
+        $context = New-AzureStorageContext -StorageAccountName $existingStorageAccount.StorageAccountName -StorageAccountKey $pw.Value[0] -Protocol Https
+
+        try{
+            # Attempt to get the blob associated with the image VHD in the current storage account
+            $imageBlob = Get-AzureStorageBlob -Blob $imageName -Container $imageContainerName -Context $context
+
+            Write-Host "The image VHD $imageName already exists in storage account $($existingStorageAccount.StorageAccountName) and container $imageContainerName."
+
+        } catch {
+
+            ####################
+            # If blob is not found, begin copy operation
+            ####################
+
+            Write-Host "Starting operation to copy image VHD from origin storage account $($imageStorageAccount.StorageAccountName) to destination storage account $($existingStorageAccount.StorageAccountName)..."
+
+            # Update job counter
+            $numberCopyJobs++
+
+            # Store storage account context
+            $contexts += $context
+
+            # If the target container does not exist, create it
+            $existingContainer = Get-AzureStorageContainer -Name $imageContainerName -Context $context -ErrorAction SilentlyContinue
+            if ( !($existingContainer) ){
+                New-AzureStorageContainer -Name $imageContainerName -Permission Off -Context $context | Out-Null
+            }
+
+            # Start the copy job
+            Start-AzureStorageBlobCopy  -Context $contextImage `
+                                        -SrcContainer $imageContainerName `
+                                        -SrcBlob $imageName `
+                                        -DestContext $context `
+                                        -DestContainer $imageContainerName `
+                                        | Out-Null
+
+        } finally {
+
+            # Regardless of whether image blob is found or not, delete sensitive information from current PowerShell session
+            Remove-Variable -Name pw
+            Remove-Variable -Name context
+        }
+
+    } # end foreach storage account
+
+    # Delete other sensitive information
+    Remove-Variable -Name pwImage
+    Remove-Variable -Name contextImage
+
+    $runningCount = $numberCopyJobs
+    # Logic waiting for the jobs to complete
+    while($runningCount -gt 0){
+        
+        # Reset counter for number of jobs still running
+        $runningCount=0 
+ 
+        # Loop through all jobs
+        foreach ($i in $offset..$numberCopyJobs){ 
+
+            # Get the status of the job
+            # Get the context of the current storage account
+            $jobStatus = Get-AzureStorageBlob -Container $imageContainerName -Blob $imageName -Context $contexts[$i-1] `
+                                                | Get-AzureStorageBlobCopyState
+            
+            <#
+            $pw = Get-AzureRmStorageAccountKey -ResourceGroupName $vmResourceGroupName -Name "teststorcarlos01"
+            $context = New-AzureStorageContext -StorageAccountName "teststorcarlos01" -StorageAccountKey $pw.Value[0] -Protocol Https
+            Stop-AzureStorageBlobCopy -Context $context -Blob $imageName -Container $imageContainerName               
+            #>
+
+            if(   $jobStatus.Status -eq "Pending"   ){ 
+                # If the copy operation is still pending, increase the counter for number of jobs still running
+                $runningCount++ 
+            } 
+        } 
+
+        Write-Host "Number of copy operations still running: $runningCount. Number of total jobs: $numberCopyJobs."
+         
+        Start-Sleep -Seconds 30
+    }
+
+    # Delete other sensitive information
+    Remove-Variable -Name contexts
+
+    Write-Host "All copy operations complete."
 }
 #end region
 
@@ -638,6 +782,17 @@ else{
 # Modify storage profile of the VM depending on whether VM is created from a standard gallery image or from a user-uploaded custom image
 if ($createFromCustomImage -eq $true) {
 
+    # Modify the location where to find VHD holding image, depending on whether VM deployment is using an availabiliy set
+    # (and therefore multiple storage accounts), or no availability set and therefore only one storage account
+    if ([string]::IsNullOrEmpty($availabilitySetName)) {
+
+        $newImageUri = "[concat('http://" + $storageAccountName + "','.blob.core.windows.net/','" + $imageContainerName + "','/','" + $imageName + "')]"
+             
+    } else {
+
+        $newImageUri = "[concat('http://','" + $storageAccountBaseName + "',padLeft(copyindex($storageAccountStartIndex),2,'0'),'.blob.core.windows.net/','" + $imageContainerName + "','/','" + $imageName + "')]"
+    }
+
     $armTemplate['resources'][$vmindex]['properties']['storageProfile'] = @{
                             osDisk = @{
                                 name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk')]"
@@ -645,7 +800,7 @@ if ($createFromCustomImage -eq $true) {
                                 caching = "ReadWrite"
                                 createOption = "FromImage"
                                 image =  @{
-                                  uri = $osDiskUrl
+                                  uri = $newImageUri
                                 }
                             }
     }
