@@ -50,10 +50,6 @@
 .PARAMETER createVnetGateway
     Boolean parameter. If $true, a Virtual Network Gateway for ExpressRoute will be created using user-specified parameters.
 
-    WARNING: Creating a Virtual Network Gateway through Azure PowerShell is currently not working properly. 
-    For now, create VNet Gateways manually through the Azure portal.
-    Further info: https://social.msdn.microsoft.com/Forums/azure/en-US/f0a22ea5-6794-4670-acb8-8d18f64ba1e1/creating-new-virtual-network-gateway-for-expressroute-fails-with-error-message-internal-server?forum=WAVirtualMachinesVirtualNetwork#f0a22ea5-6794-4670-acb8-8d18f64ba1e1
-
 .PARAMETER vnetGatewaySubnetSpace
     The IP address space for the subnet to be used for a Virtual Network Gateway, in CIDR notation (e.g. 192.168.200.0/26).
     This address space block MUST allow for at least 32 IP addresses (i.e. the subnet mask must be /27 or larger [/26, /25, etc.]).
@@ -62,7 +58,7 @@
 .NOTES
 
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 4, 2016
+    LASTEDIT: August 10, 2016
 #>
 
 param (
@@ -96,14 +92,9 @@ param (
     # Virtual Network Gateway parameters
     #######################################
 
+    [bool] $createVnetGateway = $true,
 
-    # WARNING: Creating a Virtual Network Gateway through Azure PowerShell
-    # is currently NOT working properly. For now, create VNet Gateways
-    # manually through the Azure portal.
-    # Further info: Further info: https://social.msdn.microsoft.com/Forums/azure/en-US/f0a22ea5-6794-4670-acb8-8d18f64ba1e1/creating-new-virtual-network-gateway-for-expressroute-fails-with-error-message-internal-server?forum=WAVirtualMachinesVirtualNetwork#f0a22ea5-6794-4670-acb8-8d18f64ba1e1
-    [bool] $createVnetGateway = $false,
-
-    [string] $vnetGatewaySubnetSpace = "10.2.4.0/27",
+    [string] $vnetGatewaySubnetSpace = "10.2.3.0/27",
     [string] $GatewayName = 'testGatewayName',
     [string] $GatewayIPName = 'testGatewayIPName',
     [string] $GatewayIPConfigName = 'testGatewayIPConfig',
@@ -300,11 +291,21 @@ Set-AzureRmVirtualNetwork -VirtualNetwork $vNet | Out-Null
 ###################################################
 # Following documentation: https://azure.microsoft.com/en-us/documentation/articles/expressroute-howto-add-gateway-resource-manager/
 
-# If the user has selected for a VNet Gateway to be created
-if ($createVnetGateway) {
+# Define function for creating a VNet Gateway, in case retry logic is necessary
+Function Make-VNetGateway {
+    param(
+        $resourceGroupName,
+        $virtualNetworkName,
+        $vnetGatewaySubnetSpace,
+        $GatewayIPName,
+        $GatewayIPConfigName,
+        $GatewayName,
+        $gatewaySku,
+        $location
+    )
 
     Write-Host "Creating Virtual Network Gateway, type 'ExpressRoute', and Sku $gatewaySku..."
-    Write-Host "This operation may take up to 20 minutes."
+    Write-Host "This operation may take up to 40 minutes..."
 
     Write-Host "Creating gateway subnet..."
 
@@ -314,8 +315,8 @@ if ($createVnetGateway) {
     # Add a new subnet for the Gateway
     # Note the following restrictions:
     # - The name of the Gateway subnet must be 'GatewaySubnet'
-    # - The subnet address space must be /27 or larger (/26, /25, etc.).0
-    Add-AzureRmVirtualNetworkSubnetConfig -Name 'GatewaySubnet' -VirtualNetwork $vnet -AddressPrefix $vnetGatewaySubnetSpace | Out-Null
+    # - The subnet address space must be /27 or larger (/26, /25, etc.)
+    Add-AzureRmVirtualNetworkSubnetConfig -Name 'GatewaySubnet' -VirtualNetwork $vnet -AddressPrefix $vnetGatewaySubnetSpace -ErrorAction SilentlyContinue | Out-Null
 
     # Save subnet changes to Azure
     Set-AzureRmVirtualNetwork -VirtualNetwork $vnet | Out-Null
@@ -331,6 +332,7 @@ if ($createVnetGateway) {
                                       -ResourceGroupName $resourceGroupName `
                                       -Location $location `
                                       -AllocationMethod Dynamic `
+                                      -Force `
                                       -WarningAction SilentlyContinue
 
     Write-Host "Creating IP configuration for gateway..."
@@ -347,8 +349,61 @@ if ($createVnetGateway) {
                                      -IpConfigurations $GatewayIPConfig `
                                      -GatewayType ExpressRoute `
                                      -GatewaySku $gatewaySku `
-                                     -WarningAction SilentlyContinue
+                                     -WarningAction SilentlyContinue `
+                                     | Out-Null
+
+}
+
+# If the user has selected for a VNet Gateway to be created
+if ($createVnetGateway) {
+    
+    # Initialize retry counter limit
+    $retryLimit = 2
+
+    # Initialize current number of retries
+    $retry = 0
+
+    # Initialize while-loop condition
+    $inProgress = $true
+
+    while ($inProgress) {
+        
+        # Attempt to create VNet Gateway
+        try{
+        
+            Make-VNetGateway -resourceGroupName $resourceGroupName `
+                             -virtualNetworkName $virtualNetworkName `
+                             -vnetGatewaySubnetSpace $vnetGatewaySubnetSpace `
+                             -GatewayIPName $GatewayIPName `
+                             -GatewayIPConfigName $GatewayIPConfigName `
+                             -GatewayName $GatewayName `
+                             -gatewaySku $gatewaySku `
+                             -location $location
+
+            # If making a VNet Gateway did not return any errors, signal the while loop to finish
+            Write-Host "VNet Gateway creation finished successfully."
+            $inProgress = $false
+
+        } catch {
+
+            # If there was an error during the VNet Gateway creation, update retry counter
+            $retry++
+
+            # If the retry counter does not exceed retry limit, retry VNet Gateway creation. Otherwise, throw an error.
+            if ($retry -le $retryLimit) {
+
+                Write-Host "VNet Gateway creation failed. Retrying... Current retry: $retry. Retry limit: $retryLimit"
+                Continue
+
+            } else {
+                $ErrorMessage = $_.Exception.Message
+   
+                Write-Host "Creating Virtual Network Gateway failed with the following error messaage:" -BackgroundColor Black -ForegroundColor Red
+                throw "$ErrorMessage"
+            }
+        }
+    } 
  }
 #end region
 
-Write-Host "Virtual Network deployment has completed successfully."
+Write-Host "Virtual Network deployment has finished successfully."
