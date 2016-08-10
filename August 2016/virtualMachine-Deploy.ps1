@@ -140,12 +140,11 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 9, 2016
+    LASTEDIT: August 10, 2016
 
 FUTURE ENHANCEMENTS
 - Allow for premium storage disks
 - Custom Script Extension for post-provisioning activities
-- Copy image VHD to target storage account.
 #>
 
 param (
