@@ -41,8 +41,8 @@ param (
     #######################################
     # Azure and ARM template parameters
     #######################################
-    [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
-    [string] $resourceGroupName ,
+    [string] $subscriptionName,
+    [string] $resourceGroupName,
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string] $location = 'East US 2',

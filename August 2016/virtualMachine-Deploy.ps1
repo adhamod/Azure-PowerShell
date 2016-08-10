@@ -4,7 +4,9 @@
 	virtualMachine-Deploy
 	
 .DESCRIPTION 
-    Creates an ARM template to deploy VMs in an existing VNet and in an existing storage account.
+    Creates an ARM template to deploy VMs in an existing VNet and in existing storage account(s).
+
+    This script split disks of VMs in the same availability set across multiple storage accounts.
 
 .PARAMETER subscriptionName
 	Name of the subscription in which to deploy the ARM template.
@@ -30,7 +32,7 @@
     If an availability set by the selected name does not already exist,
     one will be created.
 
-    If left blank or $null, VMs will NOT be placed in an availability set.
+    If left empty or $null, VMs will NOT be placed in an availability set.
 
     Note that VMs may only be placed in an availability set at the time of provisioning.
 
@@ -38,11 +40,40 @@
     Name of the storage account in which to place the OS disks and data disks of the VMs
     to be provisioned.
 
+    This parameter is ONLY valid IF $availabilitySetName is $null or empty.
+    That is, the disks of multiple identical VMs will only be placed in the same
+    storage account if the VMs are not going to be part of an availability set.
+    In case $availabilitySetName is NOT $null, see description for parameter $storageAccountBaseName
+
     The name of the storage account must be globally unique.
 
     This script currently assumes that the storage account is in the same resource group
     as the VMs to be provisioned.
 
+.PARAMETER storageAccountBaseName
+    Base name of the storage accounts in which to place OS and data disks of the VMs.
+
+    This parameter is ONLY valid IF $availabilitySetName is set to a value that is NOT $null or empty.
+    That is, if VMs will be placed in an availability group, this script will force that VMs'
+    disks to be placed in separate storage accounts. The storage account names will be in
+    the following format:
+    - <storageAccountBaseName><Two Digit Index>
+
+    For example, if $storageAccountBaseName = "teststorageaccount", $numberVmsToDeploy = 3, 
+    and $storageAccountStartIndex = 2, the three storage account names to be used will be:
+    - teststorageaccount02
+    - teststorageaccount03
+    - teststorageaccount04
+
+    The name of the storage account(s) must be globally unique.
+
+    This script currently assumes that the storage account(s) are in the same resource group
+    as the VMs to be provisioned.
+
+.PARAMETER storageAccountStartIndex
+    An integer that describes the first index to use when building the names of storage accounts
+    to use for VMs in an availability set. See description for $storageAccountBaseName parameter.
+    
 .PARAMETER numberDataDisks
     The number of data disks to be provisioned and assigned to each VM. May be set to 0.
 
@@ -105,7 +136,12 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 8, 2016
+    LASTEDIT: August 9, 2016
+
+FUTURE ENHANCEMENTS
+- Allow for premium storage disks
+- Custom Script Extension for post-provisioning activities
+- Copy image VHD to target storage account.
 #>
 
 param (
@@ -113,8 +149,8 @@ param (
     #######################################
     # Azure and ARM template parameters
     #######################################
-    [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
-    [string] $deploymentName = "testdeployment5",
+    [string] $subscriptionName,
+    [string] $deploymentName = "testdeployment6",
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string] $location = "East US 2",
@@ -123,34 +159,31 @@ param (
     #######################################
     # Virtual Network parameters
     #######################################
-    [string] $vnetResourceGroupName = "powershellLearning",
+    [string] $vnetResourceGroupName,
     [string] $virtualNetworkName = "testVNet1",
     [string] $subnetName = 'SubnetFront',
 
 
     #######################################
-    # Availability Set parameters
+    # Availability Set, Storage, and Disk parameters
     #######################################
-    [Parameter(Mandatory=$false)]
-    [string] $availabilitySetName = 'testAvailabilitySet1',
-    
-
-    #######################################
-    # Disk and storage parameters
-    #######################################
+    [string] $availabilitySetName,
 
     [string] $storageAccountName,
+
+    [string] $storageAccountBaseName,
+    [int] $storageAccountStartIndex,
+
     [int] $numberDataDisks = 0,
     [int] $sizeDataDisksGiB = 100,
-
 
     #######################################
     # VM parameters
     #######################################
 
     [string] $vmResourceGroupName,
-    [string] $virtualMachineBaseName = 'vmTestName',
-    [int] $numberVmsToDeploy = 2,
+    [string] $virtualMachineBaseName,
+    [int] $numberVmsToDeploy,
 
     [bool] $createFromCustomImage = $false,
 
@@ -159,6 +192,8 @@ param (
 
     [bool] $publicIPAddress = $false,
 
+    [bool] $staticPrivateIP = $true,
+
     [ValidateSet("W2K12R2", "Centos71")]
     [string] $osName = "W2K12R2",
 
@@ -166,7 +201,6 @@ param (
 
     [string] $username = 'AzrRootAdminUser',
     
-    [Parameter(Mandatory=$false)]
     [string] $password = $null,
 
     [hashtable] $vmTags = @{"Department" = "TestDepartment";"Owner" = "TestOwner"}
@@ -324,24 +358,64 @@ if ($existingSubnet -eq $null) {
     Exit -2
 }
 
-# Validate that the storage account already exists
-$existingStorageAccount = Get-AzureRmStorageAccount -ResourceGroupName $vmResourceGroupName | Where-Object {$_.StorageAccountName -eq $storageAccountName}
-if ($existingStorageAccount -eq $null) {
+# Validate that the storage account already exist(s)
+if ( [string]::IsNullOrEmpty($availabilitySetName) ) {
+    
+    # If the VM(s) to be created will NOT be placed in an availability group, all of the VM(s) disk(s) will be placed in the same storage account.
+    $existingStorageAccounts = @($null)
+    $existingStorageAccounts[0] = Get-AzureRmStorageAccount -ResourceGroupName $vmResourceGroupName | Where-Object {$_.StorageAccountName -eq $storageAccountName}
+    if ($existingStorageAccounts[0] -eq $null) {
 
-    Write-Host "A storage account with the name $storageAccountName was not found in the resource group $vmResourceGroupName." -BackgroundColor Black -ForegroundColor Red
-    Exit -2
+        Write-Host "A storage account with the name $storageAccountName was not found in the resource group $vmResourceGroupName." -BackgroundColor Black -ForegroundColor Red
+        Exit -2
+    }
+    
+} else {
+
+    # If the VM(s) to be created WILL be placed in an availability group, each VMs' disks will be placed in a separate storage account
+    Write-Host "Attempting to deploy $numberVmsToDeploy VMs in the availability set $availabilitySetName."
+    Write-Host "Using base storage account name $storageAccountBaseName and starting index for storage account name $storageAccountStartIndex."
+
+    # Initialize array to hold all expected storage accounts
+    $existingStorageAccounts = @($null)*$numberVmsToDeploy
+    
+    # Initialize counter for the index of the storage accounts
+    $j = $storageAccountStartIndex
+
+    # Loop through each (expected) storage account
+    for ($i = 0; $i -lt $numberVmsToDeploy;$i++) {
+
+        # Get the expected storage account name
+        $tempStorageAccountName = $storageAccountBaseName + $j.ToString("00")
+
+        # Get the expected storage account and store in array
+        $existingStorageAccounts[$i] = Get-AzureRmStorageAccount -ResourceGroupName $vmResourceGroupName | Where-Object {$_.StorageAccountName -eq $tempStorageAccountName}
+        
+        # Throw an error if the expected storage account does not exist
+        if ($existingStorageAccounts[$i] -eq $null) {
+            
+            
+            Write-Host "A storage account with the name $tempStorageAccountName was not found in the resource group $vmResourceGroupName." -BackgroundColor Black -ForegroundColor Red
+            Exit -2
+        }
+
+        # Update storage account index counter
+        $j++
+    }
 }
 
-# Validate that the storage account is of type 'Standard'
+# Validate that the storage account(s) are of type 'Standard'
 # TODO: Expand code to accomodate for Premium storage accounts
-if ($existingStorageAccount.Sku.Tier -ne 'Standard') {
+foreach ($existingStorageAccount in $existingStorageAccounts) {
+    if ($existingStorageAccount.Sku.Tier -ne 'Standard') {
 
-    Write-Host "The storage account with name $storageAccountName is of type $($existingStorageAccount.Sku.Name). This script only supports VM deployments to data disks of Standard tier." -BackgroundColor Black -ForegroundColor Red
-    Exit -2
+        Write-Host "The storage account with name $($existingStorageAccount.StorageAccountName) is of type $($existingStorageAccount.Sku.Name). This script only supports VM deployments to data disks of Standard tier." -BackgroundColor Black -ForegroundColor Red
+        Exit -2
+    }
 }
 
 # If an availability set is required, AND the availability set already exists, verify that the size of the selected VM can be deployed in the existing availability set
-if ($availabilitySetName) {
+if (  !([string]::IsNullOrEmpty($availabilitySetName)) ) {
     $existingAvailabilitySet = Get-AzureRmAvailabilitySet -ResourceGroupName $vmResourceGroupName -AvailabilitySetName $availabilitySetName -ErrorAction SilentlyContinue
     if ($existingAvailabilitySet) {
 
@@ -393,33 +467,47 @@ if ($numberDataDisks -gt 0) {
 
 
 # Validate that the total number of Standard data disks to be deployed does not exceed the maximum number of disks recommended per storage account
+foreach ($existingStorageAccount in $existingStorageAccounts) {
+    # Get the context for the storage account
+    $pw = Get-AzureRmStorageAccountKey -ResourceGroupName $vmResourceGroupName -Name $existingStorageAccount.StorageAccountName
+    $context = New-AzureStorageContext -StorageAccountName $existingStorageAccount.StorageAccountName -StorageAccountKey $pw.Value[0] -Protocol Https
 
-# Get the context for the storage account
-$pw = Get-AzureRmStorageAccountKey -ResourceGroupName $vmResourceGroupName -Name $storageAccountName
-$context = New-AzureStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $pw.Value[0] -Protocol Https
+    # Get number of VHDs in deployment container
+    $currentNumberOfStandardDisks = (Get-AzureStorageBlob -Container $storageContainerName -Context $context -ErrorAction SilentlyContinue | Where-Object {$_.Name.EndsWith('vhd')}).Count
 
-# Get number of VHDs in deployment container
-$currentNumberOfStandardDisks = (Get-AzureStorageBlob -Container $storageContainerName -Context $context -ErrorAction SilentlyContinue | Where-Object {$_.Name.EndsWith('vhd')}).Count
+    # Calculate number of disks to be deployed
+    if ([string]::IsNullOrEmpty($availabilitySetName)) {
+        
+        # Case where the VMs will NOT be placed in an availability set, and therefore all of the VM disks will be placed in the same storage account.
+        if ($numberDataDisks -gt 0) {
+            $numStandardDisksToDeploy = (1 + $numberDataDisks) * $numberVmsToDeploy # OS disks plus data disks
+        } else {
+            $numStandardDisksToDeploy = $numberVmsToDeploy # Only the OS disks
+        }
+    } else {
+        
+        # Case where the VMs will be placed in an availability set, and therefore each VM will have its disks placed in a separate storage account.
+        if ($numberDataDisks -gt 0) {
+            $numStandardDisksToDeploy = (1 + $numberDataDisks) # OS disk plus data disks
+        } else {
+            $numStandardDisksToDeploy = 1 # Only the OS disk
+        }
+    }
 
-# Calculate number of disks to be deployed
-if ($numberDataDisks -gt 0) {
-    $numStandardDisksToDeploy = (1 + $numberDataDisks) * $numberVmsToDeploy # OS disks plus data disks
-} else {
-    $numStandardDisksToDeploy = $numberVmsToDeploy # Only the OS disks
-}
-
-if ( ($currentNumberOfStandardDisks + $numStandardDisksToDeploy) -gt $maxDisksStorageAccountStandard ) {
+    # Raise warning if disks to be deployed exceed limit
+    if ( ($currentNumberOfStandardDisks + $numStandardDisksToDeploy) -gt $maxDisksStorageAccountStandard ) {
     
-    Write-Host "You are trying to deploy $numStandardDisksToDeploy disks into a Standard storage account already holding $currentNumberOfStandardDisks." -BackgroundColor Black -ForegroundColor Red
-    Write-Host "This would exceed the total number of standard disks that should be deployed in a single storage account ( $maxDisksStorageAccountStandard ). " -BackgroundColor Black -ForegroundColor Red
-    Write-Host "Reference: https://azure.microsoft.com/en-us/documentation/articles/storage-scalability-targets/" -BackgroundColor Black -ForegroundColor Red
-    Exit -2
+        Write-Host "You are trying to deploy $numStandardDisksToDeploy disks into the Standard storage account $($existingStorageAccount.StorageAccountName) that is already holding $currentNumberOfStandardDisks disks." -BackgroundColor Black -ForegroundColor Red
+        Write-Host "This would exceed the total number of standard disks that should be deployed in a single storage account ( $maxDisksStorageAccountStandard disks). " -BackgroundColor Black -ForegroundColor Red
+        Write-Host "Reference: https://azure.microsoft.com/en-us/documentation/articles/storage-scalability-targets/" -BackgroundColor Black -ForegroundColor Red
+        Exit -2
 
+    }
+
+    # Cleanup activities to remove sensitive variables from the current PowerShell session
+    Remove-Variable -Name pw
+    Remove-Variable -Name context
 }
-
-# Cleanup activities to remove sensitive variables from the current PowerShell session
-Remove-Variable -Name pw
-Remove-Variable -Name context
 
 
 # Validate that user selected an allowable OS type
@@ -525,22 +613,6 @@ $armTemplate = @{
                     adminUsername = $username
                     adminPassword = "[parameters('adminPassword')]"
                 }
-                storageProfile = @{
-                    imageReference = @{
-                        publisher = $image.Publisher
-                        offer = $image.Offer
-                        sku = $image.Sku
-                        version = "latest"
-                    }
-                    osDisk = @{
-                        name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk')]"
-                        caching = "ReadWrite"
-                        createOption = "FromImage"
-                        vhd = @{
-                            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk.vhd')]"
-                        }
-                    }
-                }
                 networkProfile = @{
                     networkInterfaces = @(
                         @{
@@ -564,7 +636,7 @@ else{
 }
 
 # Modify storage profile of the VM depending on whether VM is created from a standard gallery image or from a user-uploaded custom image
-if ($createFromCustomImage = $true) {
+if ($createFromCustomImage -eq $true) {
 
     $armTemplate['resources'][$vmindex]['properties']['storageProfile'] = @{
                             osDisk = @{
@@ -574,9 +646,6 @@ if ($createFromCustomImage = $true) {
                                 createOption = "FromImage"
                                 image =  @{
                                   uri = $osDiskUrl
-                                }
-                                vhd = @{
-                                  uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk.vhd')]"
                                 }
                             }
     }
@@ -595,15 +664,25 @@ if ($createFromCustomImage = $true) {
                         name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk')]"
                         caching = "ReadWrite"
                         createOption = "FromImage"
-                        vhd = @{
-                            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk.vhd')]"
-                        }
                     }
     }
 
 }
 
+# Modify the location of the OS disk
+# If VM(s) will be placed in an availability set, each VMs' OS disks will be placed in a separate storage account
+# Otherwise, all VMs OS disks will be placed in the same storage account
+if ( [string]::IsNullOrEmpty($availabilitySetName) ) {
 
+    $armTemplate['resources'][$vmindex]['properties']['storageProfile']['osDisk']['vhd'] = @{
+                            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk.vhd')]"
+                        }
+} else {
+
+    $armTemplate['resources'][$vmindex]['properties']['storageProfile']['osDisk']['vhd'] = @{
+                            uri = "[concat('http://','" + $storageAccountBaseName + "',padLeft(copyindex($storageAccountStartIndex),2,'0'),'.blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'osdisk.vhd')]"
+                        }
+}
 
 
 # Adding public IP address
@@ -652,7 +731,7 @@ else {
 
 
 # Adding availability set
-if ($availabilitySetName -ne $null){
+if ( !([string]::IsNullOrEmpty($availabilitySetName)) ){
     Write-Host "Adding Availability Set."
     $armTemplate['resources'] += @{ 
         apiVersion = "2015-06-15"
@@ -683,32 +762,49 @@ for ($i = 1; $i -le $numberDataDisks; $i++){
         $armTemplate['resources'][$vmindex]['properties']['storageprofile']['dataDisks'] = @()
     }
 
+    
+
+    # Modify the location of the data disks
+    # If VM(s) will be placed in an availability set, each VMs' data disks will be placed in a separate storage account
+    # Otherwise, all VMs data disks will be placed in the same storage account
+    if ([string]::IsNullOrEmpty($availabilitySetName)) {
+
+        $dataDiskUri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'datadisk$i.vhd')]"
+             
+    } else {
+
+        $dataDiskUri = "[concat('http://','" + $storageAccountBaseName + "',padLeft(copyindex($storageAccountStartIndex),2,'0'),'.blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'datadisk$i.vhd')]"
+    }
+
     $armTemplate['resources'][$vmindex]['properties']['storageprofile']['dataDisks'] += @{
         name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'datadisk$i')]"
         diskSizeGB = $sizeDataDisksGiB
         lun = $i - 1
         vhd = @{
-            uri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net/vhds/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'datadisk$i.vhd')]"
+            uri = $dataDiskUri
         }
         createOption = "Empty"
     }
 }
 
 # Set output
-$armTemplate['outputs'] = @{}
+$armTemplate['Outputs'] = @{}
 foreach ($i in $offset..$numberVmsToDeploy){
-    $outputvmname = $virtualMachineBaseName + $i.ToString("00")
-    $outputnicname = $virtualMachineBaseName + $i.ToString("00") + 'nic1'
-    $armTemplate['outputs'][$outputvmname] = @{
+    $outputVmName = $virtualMachineBaseName + $i.ToString("00")
+    $outputNicName = $virtualMachineBaseName + $i.ToString("00") + 'nic1'
+
+    $armTemplate['outputs'][$outputVmName] = @{
         type = "object"
-        value = "[reference('Microsoft.Compute/virtualMachines/" + $outputvmname + "' , '2015-06-15')]"
+        value = "[reference('Microsoft.Compute/virtualMachines/" + $outputVmName + "' , '2015-06-15')]"
     }
-    $armTemplate['outputs'][$outputnicname] = @{
+    $armTemplate['outputs'][$outputNicName] = @{
         type = "object"
-        value = "[reference('Microsoft.Network/networkInterfaces/" + $outputnicname + "', '2015-06-15')]"
+        value = "[reference('Microsoft.Network/networkInterfaces/" + $outputNicName + "', '2015-06-15')]"
     }
 }
 #end region
+
+
 
 
 
@@ -733,13 +829,12 @@ Out-File -FilePath $jsonFilePath -Force -InputObject $json
 
 
 try{
-    New-AzureRmResourceGroupDeployment -ResourceGroupName $vmResourceGroupName `
+    $deploymentResult = New-AzureRmResourceGroupDeployment -ResourceGroupName $vmResourceGroupName `
                                        -Name $deploymentName `
                                        -Mode Incremental `
                                        -TemplateFile $jsonFilePath `
                                        -numberOfInstances $numberVmsToDeploy `
-                                       -adminPassword ( ConvertTo-SecureString -String $password -AsPlainText -Force ) `
-                                       | Out-Null
+                                       -adminPassword ( ConvertTo-SecureString -String $password -AsPlainText -Force )
                                        
 
     Write-Host "ARM Template deployment $deploymentName finished successfully."
@@ -754,4 +849,126 @@ catch {
     throw "$ErrorMessage"
 
 }
+
+##################
+# If selected, after the DHCP server in Azure has automatically assigned the NICs a private IP address, 
+# set the allocation method of the NICs' private IP address to static
+#
+# We want these tasks to be run synchronously to save time.
+# Start-Job may NOT be used, because it does not execute within the context of the current 
+# PowerShell session and therefore does not have the necessary Azure credentials (i.e. will fail
+# by asking the user to run Login-AzureRmAccount)
+#
+# Instead, we are creating jobs using [PowerShell]::Create(), which creates a new PowerShell instance in the context
+# of the current PowerShell session.
+##################
+
+
+if ($staticPrivateIP) {
+
+    Write-Host "Changing private IP address allocation to Static..."
+
+    # Loop through each NIC to create the job to set private IP addresses to static, and start the job
+    foreach ($i in $offset..$numberVmsToDeploy){
+        
+        # Define the script block that will be executed in each block
+        $scriptBlock = { 
+            # Define the paratemers to be passed to this script block
+            Param($virtualMachineBaseName,$i,$vmResourceGroupName) 
+
+            try{
+                # The actual lines of code that set NIC's private IP address to static.
+                Import-Module AzureRM.Network
+                $nicName = $virtualMachineBaseName + $i.ToString("00") + 'nic1'
+                $nic = Get-AzureRmNetworkInterface -ResourceGroupName $vmResourceGroupName -Name $nicName
+                $nic.IpConfigurations[0].PrivateIpAllocationMethod = "Static"
+                $nic | Set-AzureRmNetworkInterface | Out-Null
+            } catch {
+                $ErrorMessage = $_.Exception.Message
+                Write-Host "Setting the private IP address of a NIC as 'Static' failed with the following message:" -BackgroundColor Black -ForegroundColor Red
+                throw "$ErrorMessage"
+            }
+        } 
+        
+        # Create a new PowerShell object and store it in a variable
+        New-Variable -Name "psSession-$virtualMachineBaseName-$i" -Value ([PowerShell]::Create())
+
+        # Add the script block to the PowerShell session, and add the parameter values
+        (Get-Variable -Name "psSession-$virtualMachineBaseName-$i" -ValueOnly).AddScript($scriptBlock).AddArgument($virtualMachineBaseName).AddArgument($i).AddArgument($vmResourceGroupName) | Out-Null
+
+        # Start the execution of the script block in the newly-created PowerShell session, and save its execution in a new variable as job
+        New-Variable -Name "job-$virtualMachineBaseName-$i" -Value ((Get-Variable -Name "psSession-$virtualMachineBaseName-$i" -ValueOnly).BeginInvoke())
+    }
+
+    # Logic waiting for the jobs to complete
+    $jobsRunning=$true 
+    while($jobsRunning){
+        
+        # Reset counter for number of jobs still running
+        $runningCount=0 
+ 
+        # Loop through all jobs
+        foreach ($i in $offset..$numberVmsToDeploy){ 
+            
+            if(   !(Get-Variable -Name "job-$virtualMachineBaseName-$i" -ValueOnly).IsCompleted   ){ 
+                # If the PowerShell command being executed is not completed, increase the counter for number of jobs still running
+                $runningCount++ 
+            } 
+            else{ 
+                # If the PowerShell command has been completed, store the results of the job in the psSession variable, and then 
+                # release all resources of the PowerShell object
+                (Get-Variable -Name "psSession-$virtualMachineBaseName-$i" -ValueOnly).EndInvoke((Get-Variable -Name "job-$virtualMachineBaseName-$i" -ValueOnly))
+                (Get-Variable -Name "psSession-$virtualMachineBaseName-$i" -ValueOnly).Dispose()
+            } 
+        } 
+        
+        # If there are no more running jobs, set while-loop flap to end
+        if ($runningCount -eq 0){ 
+            $jobsRunning=$false 
+        } 
+ 
+        Start-Sleep -Seconds 5
+    }
+
+    # Delete all the variables holding jobs and PowerShell sessions
+    foreach ($i in $offset..$numberVmsToDeploy){
+        Remove-Variable -Name "psSession-$virtualMachineBaseName-$i"
+        Remove-Variable -Name "job-$virtualMachineBaseName-$i"
+    }
+}
+
 #end region
+
+
+
+
+
+###################################################
+# region: Reporting
+###################################################
+
+# Initializations
+$toOutput = "" # Info to display on console
+$toCSV = "" # Info to store in a CSV file
+$longpadspace = 20
+
+# Loop through each VM created to extract properties
+foreach ($i in $offset..$numberVmsToDeploy){
+    $outputVmName = $virtualMachineBaseName + $i.ToString("00")
+    $outputNicName = $virtualMachineBaseName + $i.ToString("00") + 'nic1'
+
+    $data = $deploymentResult.Outputs[$outputNicName].Value.ToString() | ConvertFrom-Json
+    $ip = $data.ipConfigurations[0].Properties.privateIPAddress   
+    
+    # Build output for console
+    $toOutput += ($outputVmName.PadRight($longpadspace,'-') + $ip.Trim().PadRight($longpadspace,'-') + $username.PadRight($longpadspace,'-') + $password) + "`r`n"
+
+    # Build output for CSV file
+    $toCSV = $outputVmName + ',' + $($ip.Trim()) + ',' + $username + ',' + $password
+    Out-File -FilePath $csvfilepath -Append -InputObject $toCSV -Encoding unicode # Save output to CSV file
+}
+
+# Display VM name, private IP address, local admin username, and local admin password on the console
+$toOutput
+
+#endregion
