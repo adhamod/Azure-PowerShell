@@ -58,7 +58,7 @@
 .NOTES
 
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 10, 2016
+    LASTEDIT: August 15, 2016
 #>
 
 param (
@@ -123,8 +123,8 @@ if ($PSVersionTable.PSVersion.Major -lt 4) {
 
 # Checking for Azure PowerShell module
 $modlist = Get-Module -ListAvailable -Name 'Azure'
-if (($modlist -eq $null) -or ($modlist.Version.Major -lt 1) -or ($modlist.Version.Minor -lt 5)){
-    Write-Host "Please install the Azure Powershell module, version 1.5.0 (released June 2016) or above." -BackgroundColor Black -ForegroundColor Red
+if (($modlist -eq $null) -or ($modlist.Version.Major -lt 2)){
+    Write-Host "Please install the Azure Powershell module, version 2.0.0 (released August 2016) or above." -BackgroundColor Black -ForegroundColor Red
     Write-Host "The standalone MSI file for the latest Azure Powershell versions can be found in the following URL:" -BackgroundColor Black -ForegroundColor Red
     Write-Host "https://github.com/Azure/azure-powershell/releases" -BackgroundColor Black -ForegroundColor Red
     Exit -2
@@ -332,8 +332,8 @@ Function Make-VNetGateway {
                                       -ResourceGroupName $resourceGroupName `
                                       -Location $location `
                                       -AllocationMethod Dynamic `
-                                      -Force `
-                                      -WarningAction SilentlyContinue
+                                      -WarningAction SilentlyContinue `
+                                      -Force
 
     Write-Host "Creating IP configuration for gateway..."
 

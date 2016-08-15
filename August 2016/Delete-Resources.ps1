@@ -1,6 +1,8 @@
 ﻿# Loop through each NIC to create the job to set private IP addresses to static, and start the job
 $vmResourceGroupName = "powershellLearning"
-$nics = Get-AzureRmNetworkInterface -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "vm*"}
+#$nics = Get-AzureRmNetworkInterface -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "vm*"}
+$nics = Get-AzureRmPublicIpAddress -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "vm*"}
+#$nics = Get-AzureRmVM -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "vm*"}
 $i = 1
 $offset = 1
 $count = ($nics | measure).Count
@@ -16,7 +18,9 @@ foreach ($nic in $nics){
 
         try{
             Import-Module AzureRM.Network
-            $nic | Remove-AzureRmNetworkInterface -Force
+            #$nic | Remove-AzureRmNetworkInterface -Force
+            $nic | Remove-AzureRmPublicIpAddress -Force
+            #$nic | Remove-AzureRmVM -Force
         } catch {
             $ErrorMessage = $_.Exception.Message
             Write-Host "Failed with the following message:" -BackgroundColor Black -ForegroundColor Red

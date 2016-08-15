@@ -8,6 +8,9 @@
 
     This script split disks of VMs in the same availability set across multiple storage accounts.
 
+
+
+
 .PARAMETER subscriptionName
 	Name of the subscription in which to deploy the ARM template.
 
@@ -16,6 +19,9 @@
 
 .PARAMETER location
     The location in which to deploy these VMs.
+
+
+
 
 .PAMAMETER vnetResourceGroupName
     The resource group name in which the Virtual Network is located.
@@ -26,6 +32,9 @@
 .PARAMETER subnetName
     The name of the subnet in which to deploy VMs.
 
+
+
+
 .PARAMETER availabilitySetName
     The name of the availability set in which to deploy VMs.
 
@@ -35,6 +44,9 @@
     If left empty or $null, VMs will NOT be placed in an availability set.
 
     Note that VMs may only be placed in an availability set at the time of provisioning.
+
+
+
 
 .PARAMETER storageAccountName
     Name of the storage account in which to place the OS disks and data disks of the VMs
@@ -76,13 +88,37 @@
     
 .PARAMETER numberDataDisks
     The number of data disks to be provisioned and assigned to each VM. May be set to 0.
-
     This script currently only provisions standard data disks.
 
 .PARAMETER sizeDataDisksGiB
     The size of the data disks to be provisioned, in gibibyte (GiB)
-
     May be ignored if no data disks are to be provisioned.
+
+
+
+.PARAMETER publicIPAddress
+    If $true, add a public IP address to the NIC of the VM to deploy.
+    The public IP address will be dynamically allocated.
+
+.PARAMETER useAzureDHCP
+    If $staticPrivateIP = $true, and $useAzureDHCPh = $true, the DHCP functionality in Azure will
+    dynamically assign private IP addresses, and afterwards the assigned private IP addresses will be
+    set to 'Static'.
+
+    If $staticPrivateIP = $true, and $useAzureDHCPh = $false, the DHCP functionality in Azure will not
+    be used to assign IP addresses. Instead, the VMs to be deployed will be assigned static IP addresses
+    according to the list of IP addresses specified in $listPrivateIPAddresses.
+
+.PARAMETER listPrivateIPAddresses
+    If $useAzureDHCP = $false and $staticPrivateIP = $true, $listPrivateIPAddresses is either an array,
+    or a path to a CSV file, containing the list of private IP addresses to statically assign to the VMs to
+    be deployed.
+
+    If three VMs are to be provisioned (testVMName01,testVMName02,testVMName03), the IP addresses listed in 
+    $listPrivateIPAddresses will be sequentially assigned.
+
+
+
 
 .PARAMETER vmResourceGroupName
     The name of the resource group in which to deploy VMs and their respective NICs.
@@ -101,10 +137,6 @@
     
 .PARAMETER numberVmsToDeploy
     The number of identical VMs to deploy.
-
-.PARAMETER publicIPAddress
-    If $true, add a public IP address to the NIC of the VM to deploy.
-    The public IP address will be dynamically allocated.
 
 .PARAMETER createFromCustomImage
     If $true, the VM will be provisioned from a user-uploaded custom image.
@@ -140,7 +172,7 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 10, 2016
+    LASTEDIT: August 15, 2016
 
 FUTURE ENHANCEMENTS
 - Allow for premium storage disks
@@ -153,7 +185,7 @@ param (
     # Azure and ARM template parameters
     #######################################
     [string] $subscriptionName,
-    [string] $deploymentName = "testdeployment6",
+    [string] $deploymentName,
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string] $location = "East US 2",
@@ -163,7 +195,7 @@ param (
     # Virtual Network parameters
     #######################################
     [string] $vnetResourceGroupName,
-    [string] $virtualNetworkName,
+    [string] $virtualNetworkName = "testVNet1",
     [string] $subnetName = 'SubnetFront',
 
 
@@ -175,10 +207,21 @@ param (
     [string] $storageAccountName,
 
     [string] $storageAccountBaseName,
-    [int] $storageAccountStartIndex = 1,
+    [int] $storageAccountStartIndex,
 
     [int] $numberDataDisks = 0,
     [int] $sizeDataDisksGiB = 100,
+
+
+    #######################################
+    # IP configuration parameters
+    #######################################
+
+    [bool] $publicIPAddress = $false,
+
+    [bool] $staticPrivateIP = $false,
+    [bool] $useAzureDHCP = $false,
+    $listPrivateIPAddresses = "C:\ipaddresses.csv",
 
     #######################################
     # VM parameters
@@ -186,16 +229,12 @@ param (
 
     [string] $vmResourceGroupName,
     [string] $virtualMachineBaseName,
-    [int] $numberVmsToDeploy = 2,
+    [int] $numberVmsToDeploy,
 
     [bool] $createFromCustomImage = $true,
 
     [Parameter(Mandatory=$false)]
     [string] $imageUrl,
-
-    [bool] $publicIPAddress = $false,
-
-    [bool] $staticPrivateIP = $true,
 
     [ValidateSet("W2K12R2", "Centos71")]
     [string] $osName = "W2K12R2",
@@ -203,7 +242,6 @@ param (
     [string] $vmSize = "Standard_A1",
 
     [string] $username = 'AzrRootAdminUser',
-    
     [string] $password = $null,
 
     [hashtable] $vmTags = @{"Department" = "TestDepartment";"Owner" = "TestOwner"}
@@ -290,8 +328,8 @@ if ($PSVersionTable.PSVersion.Major -lt 4) {
 
 # Checking for Azure PowerShell module
 $modlist = Get-Module -ListAvailable -Name 'Azure'
-if (($modlist -eq $null) -or ($modlist.Version.Major -lt 1) -or ($modlist.Version.Minor -lt 5)){
-    Write-Host "Please install the Azure Powershell module, version 1.5.0 (released June 2016) or above." -BackgroundColor Black -ForegroundColor Red
+if (($modlist -eq $null) -or ($modlist.Version.Major -lt 2)){
+    Write-Host "Please install the Azure Powershell module, version 2.0.0 (released August 2016) or above." -BackgroundColor Black -ForegroundColor Red
     Write-Host "The standalone MSI file for the latest Azure Powershell versions can be found in the following URL:" -BackgroundColor Black -ForegroundColor Red
     Write-Host "https://github.com/Azure/azure-powershell/releases" -BackgroundColor Black -ForegroundColor Red
     Exit -2
@@ -528,6 +566,51 @@ foreach ($existingStorageAccount in $existingStorageAccounts) {
     Remove-Variable -Name context
 }
 
+# If IP addresses are to be statically assigned, check that the list of IP addresses specified is valid
+if (   $staticPrivateIP -and !($useAzureDHCP)   ) {
+    
+    # If the input parameter is not already an array, assume it is a file path to a CSV containing the list of IP addresses
+    if ( !($listPrivateIPAddresses -is [System.Array]) ) {
+        
+        try{
+            # Import list of IP addresses from CSV file
+            $ipAddressObjects = Import-Csv -Path $listPrivateIPAddresses
+
+            # Get the header of the CSV column containing the IP addresses
+            $csvHeader = (Get-Member -InputObject $ipAddressObjects[0] | Where-Object {$_.MemberType -eq 'NoteProperty'}).Name
+
+            # Modify the $listPrivateIPAddresses array to only contain the IP address as a string
+            $listPrivateIPAddresses = @($false) * $ipAddressObjects.Count
+            for ($i=0;$i -lt $ipAddressObjects.Count;$i++) {
+                    
+                $listPrivateIPAddresses[$i] = $ipAddressObjects[$i].$csvHeader
+            }
+
+        } catch {
+
+            $ErrorMessage = $_.Exception.Message
+            
+            Write-Host "The input parameter 'listPrivateIPAddresses' is not of type System.Array." -BackgroundColor Black -ForegroundColor Red
+            Write-Host "Assuming it is a string containing a file path to a CSV file, attempting to import CSV file into PowerShell failed with the following error message:" -BackgroundColor Black -ForegroundColor Red
+            throw "$ErrorMessage"
+        }
+    }
+
+    # Precondition: $listPrivateIPAddresses is of type [System.Array]
+    $numIPAddresses = ($listPrivateIPAddresses | Measure).Count
+    if ( $numIPAddresses -ne $numberVmsToDeploy  ) {
+        
+        Write-Host "You are attempting to provision $numberVmsToDeploy VMs with statically-assigned private IP addresses." -BackgroundColor Black -ForegroundColor Red
+        Write-Host "You have specified $numIPAddresses private IP addresses in the input parameter 'listPrivateIPAddresses', either as an array or as a CSV file." -BackgroundColor Black -ForegroundColor Red
+        Write-Host "Ensure that the number of specified private IP addresses matches the number of VMs to deploy." -BackgroundColor Black -ForegroundColor Red
+        Exit -2
+    }
+
+    Write-Host "Statically assigning the following private IP addresses:"
+    $listPrivateIPAddresses
+
+}
+
 
 # Validate that user selected an allowable OS type
 $image = $osList | Where-Object {$_.Name -eq $osName}
@@ -725,9 +808,8 @@ $armTemplate = @{
                     @{
                         name = "ipcon"
                         properties = @{
-                            privateIPAllocationMethod = "Dynamic"
-                            subnet = @{
-                                id = "[variables('subnet1Ref')]"
+                                subnet = @{
+                                    id = "[variables('subnet1Ref')]"
                             }
                         }
                     }
@@ -778,8 +860,33 @@ else{
     $nicindex = 0
 }
 
+# Set the private IP allocation method for the VMs' NICs
+if (   $staticPrivateIP -and !($useAzureDHCP)   ) {
+    
+    # Set each IP address as a variable in the JSON template
+    for($i = 0;$i -lt $numIPAddresses; $i++) {
+
+        $ipNumber = $i + $offset
+        $ipAddressName = "staticIP-$ipNumber"
+        $armTemplate['variables'][$ipAddressName] = $listPrivateIPAddresses[$i]
+    }
+
+    # Assign the static IP address to the NIC resource, leveraging the ARM template function copyIndex() to assign all
+    # IP addresses simultaneously
+    $armTemplate['resources'][$nicindex]['properties']['ipConfigurations'][0]['properties']['privateIPAddress'] = "[variables(concat('staticIP-', copyindex($offset)))]"
+
+    # Set IP allocation method to Static
+    $armTemplate['resources'][$nicindex]['properties']['ipConfigurations'][0]['properties']['privateIPAllocationMethod'] = 'Static'
+
+} else {
+
+    # Set IP allocation method to Dyamic
+    $armTemplate['resources'][$nicindex]['properties']['ipConfigurations'][0]['properties']['privateIPAllocationMethod'] = 'Dynamic'
+
+}
+
 # Modify storage profile of the VM depending on whether VM is created from a standard gallery image or from a user-uploaded custom image
-if ($createFromCustomImage -eq $true) {
+if ($createFromCustomImage) {
 
     # Modify the location where to find VHD holding image, depending on whether VM deployment is using an availabiliy set
     # (and therefore multiple storage accounts), or no availability set and therefore only one storage account
@@ -820,7 +927,6 @@ if ($createFromCustomImage -eq $true) {
                         createOption = "FromImage"
                     }
     }
-
 }
 
 # Modify the location of the OS disk
@@ -845,7 +951,6 @@ if ($publicIPAddress -eq $true) {
 
     # Add public IP as a dependency of the NIC
     if ($armTemplate['resources'][$nicindex]['dependsOn'] -eq $null){
-        Write-Host "enter first"
         $armTemplate['resources'][$nicindex]['dependsOn'] = @()
     }
     $armTemplate['resources'][$nicindex]['dependsOn'] += "[concat('Microsoft.Network/publicIPAddresses/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), 'ip1')]"
@@ -1017,8 +1122,9 @@ catch {
 # of the current PowerShell session.
 ##################
 
-
-if ($staticPrivateIP) {
+# Execute ONLY if static private IP addresses are required AFTER being automatically assigned by DHCP functionality in
+# Azure
+if ($staticPrivateIP -and $useAzureDHCP) {
 
     Write-Host "Changing private IP address allocation to Static..."
 
@@ -1071,7 +1177,8 @@ if ($staticPrivateIP) {
             else{ 
                 # If the PowerShell command has been completed, store the results of the job in the psSession variable, and then 
                 # release all resources of the PowerShell object
-                (Get-Variable -Name "psSession-$virtualMachineBaseName-$i" -ValueOnly).EndInvoke((Get-Variable -Name "job-$virtualMachineBaseName-$i" -ValueOnly))
+                $temp = Get-Variable -Name "job-$virtualMachineBaseName-$i" -ValueOnly
+                (Get-Variable -Name "psSession-$virtualMachineBaseName-$i" -ValueOnly).EndInvoke($temp)
                 (Get-Variable -Name "psSession-$virtualMachineBaseName-$i" -ValueOnly).Dispose()
             } 
         } 

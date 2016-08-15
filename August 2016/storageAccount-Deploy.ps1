@@ -33,7 +33,7 @@
 
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 4, 2016
+    LASTEDIT: August 15, 2016
 #>
 
 param (
@@ -41,20 +41,20 @@ param (
     #######################################
     # Azure and ARM template parameters
     #######################################
-    [string] $subscriptionName,
-    [string] $resourceGroupName,
+    [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
+    [string] $resourceGroupName = "powershellLearning",
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string] $location = 'East US 2',
     
-    [string] $deploymentName = "testdeployment3",
-    [string] $templateFilePath,
+    [string] $deploymentName = "testdeployment5",
+    [string] $templateFilePath = "C:\Users\carpat\OneDrive - Microsoft\Azure-PowerShell\August 2016\storageAccount-Template.json",
 
 
     #######################################
     # Storage Account parameters
     #######################################
-    [string] $storageAccountName,
+    [string] $storageAccountName = "testvmchar05",
 
     [ValidateSet('Premium_LRS','Standard_GRS','Standard_LRS','Standard_RAGRS','Standard_ZRS')]
     [string] $storageAccountType = 'Standard_LRS',
@@ -83,8 +83,8 @@ if ($PSVersionTable.PSVersion.Major -lt 4) {
 
 # Checking for Azure PowerShell module
 $modlist = Get-Module -ListAvailable -Name 'Azure'
-if (($modlist -eq $null) -or ($modlist.Version.Major -lt 1) -or ($modlist.Version.Minor -lt 5)){
-    Write-Host "Please install the Azure Powershell module, version 1.5.0 (released June 2016) or above." -BackgroundColor Black -ForegroundColor Red
+if (($modlist -eq $null) -or ($modlist.Version.Major -lt 2)){
+    Write-Host "Please install the Azure Powershell module, version 2.0.0 (released August 2016) or above." -BackgroundColor Black -ForegroundColor Red
     Write-Host "The standalone MSI file for the latest Azure Powershell versions can be found in the following URL:" -BackgroundColor Black -ForegroundColor Red
     Write-Host "https://github.com/Azure/azure-powershell/releases" -BackgroundColor Black -ForegroundColor Red
     Exit -2
