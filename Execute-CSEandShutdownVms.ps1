@@ -159,6 +159,7 @@ workflow Execute-CSEandShutdownVms
 
         # Create hashtable with results from CSE execution for this VM
         $outputTable = @{
+                            "RgName" = $rgName;
                             "VMName" = $vmName;
                             "StdOut" = $StdOut;
                             "StdErr" = $StdErr
@@ -178,11 +179,13 @@ workflow Execute-CSEandShutdownVms
     # Loop through all Windows VMs to shutdown based on output of CSE
     foreach -parallel ($i in $startCount..$endCount){
 
-        # Get object for current VM
-        $vm = $vms[$i-1]
-        $rgName = $vm.ResourceGroupName
-
-        # Extract Name of VM, and the StdOut and StdErr of its CSE operation
+        # Extract Name of Resource Group, VM, and the StdOut and StdErr of its CSE operation
+        $rgName = InlineScript{
+            $index = $using:i - 1
+            $array = $using:cseOutputs
+            $arrayElement = $array[$index].Values
+            $arrayElement.Item("RgName")
+        }
         $vmName = InlineScript{
             $index = $using:i - 1
             $array = $using:cseOutputs
