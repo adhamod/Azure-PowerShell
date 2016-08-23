@@ -4,9 +4,9 @@
 	virtualMachine-Deploy
 	
 .DESCRIPTION 
-    Creates an ARM template to deploy VMs in an existing VNet and in existing storage account(s).
+    Creates an ARM template to deploy several Virtual Machines (VMs) in an existing VNet and in existing storage account(s).
 
-    This script split disks of VMs in the same availability set across multiple storage accounts.
+    This script split the disks of VMs in the same availability set across multiple storage accounts.
 
 
 
@@ -43,10 +43,7 @@
 
     If left empty or $null, VMs will NOT be placed in an availability set.
 
-    Note that VMs may only be placed in an availability set at the time of provisioning.
-
-
-
+    Note that VMs may ONLY be placed in an availability set at the time of provisioning.
 
 .PARAMETER storageAccountName
     Name of the storage account in which to place the OS disks and data disks of the VMs
@@ -100,6 +97,13 @@
     If $true, add a public IP address to the NIC of the VM to deploy.
     The public IP address will be dynamically allocated.
 
+.PARAMETER staticPrivateIP
+    A boolean. If set to $true, the private IP address of the NIC assigned to each VM
+    will be set to Static.
+
+    Note that private IP addresses in Azure, even if they are Dynamic, will NOT change
+    unless the VM is deallocated.
+
 .PARAMETER useAzureDHCP
     If $staticPrivateIP = $true, and $useAzureDHCPh = $true, the DHCP functionality in Azure will
     dynamically assign private IP addresses, and afterwards the assigned private IP addresses will be
@@ -114,7 +118,7 @@
     or a path to a CSV file, containing the list of private IP addresses to statically assign to the VMs to
     be deployed.
 
-    If three VMs are to be provisioned (testVMName01,testVMName02,testVMName03), the IP addresses listed in 
+    If three VMs are to be provisioned (e.g. testVMName01,testVMName02,testVMName03), the IP addresses listed in 
     $listPrivateIPAddresses will be sequentially assigned.
 
 
@@ -139,7 +143,7 @@
     The number of identical VMs to deploy.
 
 .PARAMETER createFromCustomImage
-    If $true, the VM will be provisioned from a user-uploaded custom image.
+    A boolean. If $true, the VM will be provisioned from a user-uploaded custom image.
     The VHD holding this custom image will be specified by $imageUrl
 
 .PARAMETER imageUrl
@@ -166,17 +170,65 @@
 .PARAMETER password
     Password of the local administrator account of the VM.
     If left blank or $null, a random password will be generated and outputted to the console.
+    The supplied password must be between 8-123 characters long and must satisfy at least 3 of password complexity requirements from the following:
+        - 1) Contains an uppercase character
+        - 2) Contains a lowercase character
+        - 3) Contains a numeric digit
+        - 4) Contains a special character
 
 .PARAMETER vmTags
     Tags to be applied to the NICs and VMs to be deployed.
 
+
+
+.PARAMETER useVmDiagnostics
+    A boolean. If $true, the VM extension Microsoft.Azure.Diagnostics.IaaSDiagnostics will be installed
+    on the VM using default settings. The same storage account in which the VM is deployed will be used
+    as the storage account for the VM extension files.
+
+
+.PARAMETER useCustomScriptExtension
+    A boolean. If $true, the VM extension Microsoft.Compute.CustomScriptExtension (for Windows VMs) or
+    the VM extension Microsoft.OSTCExtensions.CustomScriptForLinux (for Linux VMs) will be deployed.
+
+.PARAMETER customScriptExtensionStorageAccountResourceGroup
+    The resource group of the storage account in which the scripts to be executed through Custom Script Extension are located.
+
+.PARAMETER customScriptExtensionStorageAccountName
+    The name of the storage account in which the scripts to be executed through Custom Script Extension are located.
+
+.PARAMETER customScriptExtensionStorageKey
+    The key of the storage account in which the scripts to be executed through Custom Script Extension are located.
+
+    This is an OPTIONAL parameter. If $customScriptExtensionStorageKey is left blank or null, the script will attempt to
+    automatically retrieve the storage account key. This operation will only work if 1) the storage account is in the same
+    subscription as the subscription in which the VMs are being deployed, and 2) the user running this script has sufficient
+    permissions to access the key of the storage account.
+
+.PARAMETER fileUris
+    An array of strings, where each string is the URI of a file to be downloaded into the target VMs through Custom Script Extension.
+
+    This parameter does NOT NECESSARILY contain the URIs of the scripts that will be EXECUTED. The files contained in this parameter
+    describe only the files that will be DOWNLOADED. The script execution depends on the parameter $commandToExecute.
+
+    Example: $fileUris = @('https://teststorageaccount.blob.core.windows.net/scripts/testScript.ps1',
+                           'https://teststorageaccount.blob.core.windows.net/scripts/supportingFile.csv'),
+
+.PARAMETER commandToExecute
+    The command to execute through Custom Script Extension.
+
+    Example for a Windows VM: $commandToExecute = 'powershell -ExecutionPolicy Unrestricted -File testScript.ps1 -reboot test'
+    In this example, we are executing the script 'testScript.ps1' (which was specified as a file to download in $fileUris).
+    We are also passing the value 'test' to the parameter called 'reboot'.
+    And we are setting the Execution Policy of the PowerShell session that is going to run the command as 'Unrestricted'
+
 .NOTES
     AUTHOR: Carlos Patiño
-    LASTEDIT: August 15, 2016
+    LASTEDIT: August 23, 2016
 
 FUTURE ENHANCEMENTS
 - Allow for premium storage disks
-- Custom Script Extension for post-provisioning activities
+- Allow option for Windows VMs to automatically join to a domain
 #>
 
 param (
@@ -184,7 +236,7 @@ param (
     #######################################
     # Azure and ARM template parameters
     #######################################
-    [string] $subscriptionName,
+    [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
     [string] $deploymentName,
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
@@ -195,8 +247,8 @@ param (
     # Virtual Network parameters
     #######################################
     [string] $vnetResourceGroupName,
-    [string] $virtualNetworkName = "testVNet1",
-    [string] $subnetName = 'SubnetFront',
+    [string] $virtualNetworkName,
+    [string] $subnetName,
 
 
     #######################################
@@ -231,7 +283,7 @@ param (
     [string] $virtualMachineBaseName,
     [int] $numberVmsToDeploy,
 
-    [bool] $createFromCustomImage = $true,
+    [bool] $createFromCustomImage = $false,
 
     [Parameter(Mandatory=$false)]
     [string] $imageUrl,
@@ -244,8 +296,28 @@ param (
     [string] $username = 'AzrRootAdminUser',
     [string] $password = $null,
 
-    [hashtable] $vmTags = @{"Department" = "TestDepartment";"Owner" = "TestOwner"}
-    
+    [hashtable] $vmTags = @{"Department" = "TestDepartment";"Owner" = "TestOwner"},
+
+    #######################################
+    # VM diagnostics parameters
+    #######################################
+    [bool] $useVmDiagnostics = $true,
+
+    #######################################
+    # Post-provisioning parameters
+    #######################################
+
+    [bool] $useCustomScriptExtension = $false,
+
+    [string] $customScriptExtensionStorageAccountResourceGroup,
+    [string] $customScriptExtensionStorageAccountName,
+
+    [Parameter(Mandatory=$false)]
+    [string] $customScriptExtensionStorageKey,
+
+    [string[]] $fileUris,
+
+    [string] $commandToExecute
 )
 
 ###################################################
@@ -309,6 +381,7 @@ function Generate-Password{
 # region: PowerShell and Azure Dependency Checks
 ###################################################
 cls
+[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
 $ErrorActionPreference = 'Stop'
 
 Write-Host "Checking Dependencies..."
@@ -620,6 +693,47 @@ if ($image -eq $null) {
     Exit -2
 }
 
+# If using Custom Script Extension, verify that the storage account is accessible and that the storage account key can be retrieved
+if ($useCustomScriptExtension) {
+
+    # If a storage account key was NOT provided, attempt to retrieve the storage key from the account
+    if ( [string]::IsNullOrEmpty($customScriptExtensionStorageKey) ) {
+
+        try {
+            
+            $customScriptExtensionStorageKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $customScriptExtensionStorageAccountResourceGroup `
+                                                                             -Name $customScriptExtensionStorageAccountName).Value[0]
+        } catch {
+
+            $ErrorMessage = $_.Exception.Message
+            
+            Write-Host "Failed to get key for storage account in which Custom Script Extension scripts are stored." -BackgroundColor Black -ForegroundColor Red
+            Write-Host "If storage account is in a different subscription in which VMs are being deployed, or if RBAC rules limit user's permissions to extract storage key, manually input storage account key as a parameter." -BackgroundColor Black -ForegroundColor Red
+            Write-Host "Error message:" -BackgroundColor Black -ForegroundColor Red
+            throw "$ErrorMessage"
+        }
+    } 
+
+    # If a storage account key was provided, check its validity
+    else {
+
+        try{
+            New-AzureStorageContext -StorageAccountName $customScriptExtensionStorageAccountName `
+                                    -StorageAccountKey $customScriptExtensionStorageKey `
+                                    | Out-Null
+        } catch {
+            $ErrorMessage = $_.Exception.Message
+            
+            Write-Host "Failed to obtain the context of the storage account for Custom Script Extension scripts." -BackgroundColor Black -ForegroundColor Red
+            Write-Host "Please verify that the storage account key that was manually included as a parameter is correct." -BackgroundColor Black -ForegroundColor Red
+            Write-Host "If no storage account key is specified, this script will attempt to automatically extract the storage account key. The success of this operation would depend on user and subscription permissions." -BackgroundColor Black -ForegroundColor Red
+            Write-Host "Error message:" -BackgroundColor Black -ForegroundColor Red
+            throw "$ErrorMessage"
+
+        }
+    }
+}
+
 # If VM is being deployed from a user-uploaded custom image, validate that the VHD containing the generalized image is
 # in the same storage account as the storage account in which the VMs disks will be deployed
 if ($createFromCustomImage) {
@@ -732,12 +846,6 @@ if ($createFromCustomImage) {
             # Get the context of the current storage account
             $jobStatus = Get-AzureStorageBlob -Container $imageContainerName -Blob $imageName -Context $contexts[$i-1] `
                                                 | Get-AzureStorageBlobCopyState
-            
-            <#
-            $pw = Get-AzureRmStorageAccountKey -ResourceGroupName $vmResourceGroupName -Name "teststorcarlos01"
-            $context = New-AzureStorageContext -StorageAccountName "teststorcarlos01" -StorageAccountKey $pw.Value[0] -Protocol Https
-            Stop-AzureStorageBlobCopy -Context $context -Blob $imageName -Container $imageContainerName               
-            #>
 
             if(   $jobStatus.Status -eq "Pending"   ){ 
                 # If the copy operation is still pending, increase the counter for number of jobs still running
@@ -834,7 +942,7 @@ $armTemplate = @{
                    vmSize = $vmSize
                 }
                 osProfile = @{
-                    computername = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'))]"
+                    computerName = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'))]"
                     adminUsername = $username
                     adminPassword = "[parameters('adminPassword')]"
                 }
@@ -1046,8 +1154,157 @@ for ($i = 1; $i -le $numberDataDisks; $i++){
     }
 }
 
+# Set VM diagnostics extension for each VM, if selected by the user
+if ($useVmDiagnostics) {
+
+    Write-Host "Adding VM diagnostics..."
+    
+    # Modify the location of the diagnostics files
+    # If VM(s) will be placed in an availability set, each VMs' data disks will be placed in a separate storage account
+    # Otherwise, all VMs diagnostics files will be placed in the same storage account
+    if ([string]::IsNullOrEmpty($availabilitySetName)) {
+
+        $storageNameForDiagnostics = $storageAccountName
+        $storageNameForDiagnostics2 = "'" + $storageAccountName + "'"
+        $storageUri = "[concat('http://" + $storageAccountName + ".blob.core.windows.net')]"
+             
+    } else {
+
+        $storageNameForDiagnostics = "[concat('" + $storageAccountBaseName + "',padLeft(copyindex($storageAccountStartIndex),2,'0'))]"
+        $storageNameForDiagnostics2 = "concat('" + $storageAccountBaseName + "',padLeft(copyindex($storageAccountStartIndex),2,'0'))"
+        $storageUri = "[concat('http://','" + $storageAccountBaseName + "',padLeft(copyindex($storageAccountStartIndex),2,'0'),'.blob.core.windows.net')]"
+    }
+
+    
+    # Define the variables needed for the default VM diagnotics configuration
+    # Reference: https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-extensions-diagnostics-template/#diagnostics-configuration-variables
+    $vmDiagnosticsVariables = @{
+                                    wadlogs = "<WadCfg> <DiagnosticMonitorConfiguration overallQuotaInMB=\""4096\"" xmlns=\""http://schemas.microsoft.com/ServiceHosting/2010/10/DiagnosticsConfiguration\""> <DiagnosticInfrastructureLogs scheduledTransferLogLevelFilter=\""Error\""/> <WindowsEventLog scheduledTransferPeriod=\""PT1M\"" > <DataSource name=\""Application!*[System[(Level = 1 or Level = 2)]]\"" /> <DataSource name=\""Security!*[System[(Level = 1 or Level = 2)]]\"" /> <DataSource name=\""System!*[System[(Level = 1 or Level = 2)]]\"" /></WindowsEventLog>"
+                                    wadperfcounters1 = "<PerformanceCounters scheduledTransferPeriod=\""PT1M\""><PerformanceCounterConfiguration counterSpecifier=\""\\Processor(_Total)\\% Processor Time\"" sampleRate=\""PT15S\"" unit=\""Percent\""><annotation displayName=\""CPU utilization\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Processor(_Total)\\% Privileged Time\"" sampleRate=\""PT15S\"" unit=\""Percent\""><annotation displayName=\""CPU privileged time\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Processor(_Total)\\% User Time\"" sampleRate=\""PT15S\"" unit=\""Percent\""><annotation displayName=\""CPU user time\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Processor Information(_Total)\\Processor Frequency\"" sampleRate=\""PT15S\"" unit=\""Count\""><annotation displayName=\""CPU frequency\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\System\\Processes\"" sampleRate=\""PT15S\"" unit=\""Count\""><annotation displayName=\""Processes\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Process(_Total)\\Thread Count\"" sampleRate=\""PT15S\"" unit=\""Count\""><annotation displayName=\""Threads\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Process(_Total)\\Handle Count\"" sampleRate=\""PT15S\"" unit=\""Count\""><annotation displayName=\""Handles\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Memory\\% Committed Bytes In Use\"" sampleRate=\""PT15S\"" unit=\""Percent\""><annotation displayName=\""Memory usage\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Memory\\Available Bytes\"" sampleRate=\""PT15S\"" unit=\""Bytes\""><annotation displayName=\""Memory available\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Memory\\Committed Bytes\"" sampleRate=\""PT15S\"" unit=\""Bytes\""><annotation displayName=\""Memory committed\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\Memory\\Commit Limit\"" sampleRate=\""PT15S\"" unit=\""Bytes\""><annotation displayName=\""Memory commit limit\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\% Disk Time\"" sampleRate=\""PT15S\"" unit=\""Percent\""><annotation displayName=\""Disk active time\"" locale=\""en-us\""/></PerformanceCounterConfiguration>"
+                                    wadperfcounters2 = "<PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\% Disk Read Time\"" sampleRate=\""PT15S\"" unit=\""Percent\""><annotation displayName=\""Disk active read time\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\% Disk Write Time\"" sampleRate=\""PT15S\"" unit=\""Percent\""><annotation displayName=\""Disk active write time\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\Disk Transfers/sec\"" sampleRate=\""PT15S\"" unit=\""CountPerSecond\""><annotation displayName=\""Disk operations\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\Disk Reads/sec\"" sampleRate=\""PT15S\"" unit=\""CountPerSecond\""><annotation displayName=\""Disk read operations\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\Disk Writes/sec\"" sampleRate=\""PT15S\"" unit=\""CountPerSecond\""><annotation displayName=\""Disk write operations\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\Disk Bytes/sec\"" sampleRate=\""PT15S\"" unit=\""BytesPerSecond\""><annotation displayName=\""Disk speed\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\Disk Read Bytes/sec\"" sampleRate=\""PT15S\"" unit=\""BytesPerSecond\""><annotation displayName=\""Disk read speed\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\PhysicalDisk(_Total)\\Disk Write Bytes/sec\"" sampleRate=\""PT15S\"" unit=\""BytesPerSecond\""><annotation displayName=\""Disk write speed\"" locale=\""en-us\""/></PerformanceCounterConfiguration><PerformanceCounterConfiguration counterSpecifier=\""\\LogicalDisk(_Total)\\% Free Space\"" sampleRate=\""PT15S\"" unit=\""Percent\""><annotation displayName=\""Disk free space (percentage)\"" locale=\""en-us\""/></PerformanceCounterConfiguration></PerformanceCounters>"
+                                    wadcfgxstart = "[concat(variables('wadlogs'), variables('wadperfcounters1'), variables('wadperfcounters2'), '<Metrics resourceId=\""')]"
+                                    wadmetricsresourceid = "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name , '/providers/', 'Microsoft.Compute/virtualMachines/')]"
+                                    wadcfgxend = "\""><MetricAggregation scheduledTransferPeriod=\""PT1H\""/><MetricAggregation scheduledTransferPeriod=\""PT1M\""/></Metrics></DiagnosticMonitorConfiguration></WadCfg>"
+                                }
+
+    # Add variables to ARM template
+    foreach ($item in $vmDiagnosticsVariables.GetEnumerator()) {
+        
+        $armTemplate['variables'].Add($item.Name,$item.Value)
+        
+    }
+
+    # Adding VM diagnostics
+    $armTemplate['resources'] += @{
+        name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), '/','VMDiagnostics')]"
+        type = "Microsoft.Compute/virtualMachines/extensions"
+        location = $location
+        apiVersion = "2015-06-15"
+        copy = @{
+                name = "diagnosticsLoop"
+                count = "[parameters('numberOfInstances')]"
+            }
+        dependsOn = @(
+                "[concat('Microsoft.Compute/virtualMachines/', '" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'))]"
+            )
+        tags = @{
+            displayName = "AzureDiagnostics"
+        }
+        properties = @{
+            publisher = "Microsoft.Azure.Diagnostics"
+            type = "IaaSDiagnostics"
+            typeHandlerVersion = "1.5"
+            autoUpgradeMinorVersion = $true
+            settings = @{
+                xmlCfg = "[base64(concat(variables('wadcfgxstart'), variables('wadmetricsresourceid'), concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0')), variables('wadcfgxend')))]"
+                StorageAccount = $storageNameForDiagnostics
+            }
+            protectedSettings = @{
+                storageAccountName = $storageNameForDiagnostics
+                storageAccountKey = "[listKeys(resourceId('Microsoft.Storage/storageAccounts', $storageNameForDiagnostics2), '2016-01-01').keys[0].value]"
+                storageAccountEndPoint = "https://core.windows.net"
+            }
+        }
+    }
+}
+
+# Adding Custom Script Extension
+if ($useCustomScriptExtension) {
+
+    # Deploying multiple instances of Custom Script Extension (CSE) in a single
+    # VM will not work if these CSE instances have different names. Therefore, the name
+    # of the CSE extension should be kept consistent per VM.
+    $extensionName = "CustomScriptExtension"
+    
+    # Custom Script Extension type is different for Windows vs. Linux VMs
+    if ($image.OSFlavor -eq 'Windows'){
+        Write-Host "Adding Custom Script Extension for Windows VM..."
+
+        $armTemplate['resources'] += @{
+            type = "Microsoft.Compute/virtualMachines/extensions"
+            name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), '/" + $extensionName + "')]"
+            apiVersion = "2015-06-15"
+            location = $location
+            copy = @{
+                name = "extension2loop"
+                count = "[parameters('numberOfInstances')]"
+            }
+            dependsOn = @(
+                "[concat('Microsoft.Compute/virtualMachines/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'))]"
+            )
+           properties = @{ 
+                publisher = "Microsoft.Compute"
+                type = "CustomScriptExtension"
+                typeHandlerVersion = "1.7"
+                autoUpgradeMinorVersion = $true
+                settings = @{ 
+                    fileUris = $fileUris
+                    commandToExecute = $commandToExecute
+                }
+            protectedSettings = @{ 
+                    storageAccountName = $customScriptExtensionStorageAccountName
+                    storageAccountKey = $customScriptExtensionStorageKey
+                }
+            }
+        }
+    }
+
+    elseif ($image.OSFlavor -eq 'Linux'){
+        Write-Host "Adding Custom Script Extension for Linux VM..."
+
+        $armTemplate['resources'] += @{
+            type = "Microsoft.Compute/virtualMachines/extensions"
+            name = "[concat('" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'), '/" + $extensionName + "')]"
+            apiVersion = "2015-06-15"
+            location = $location
+            copy = @{
+                name = "extensionloop"
+                count = "[parameters('numberOfInstances')]"
+            }
+            dependsOn = @( 
+                "[concat('Microsoft.Compute/virtualMachines/','" + $virtualMachineBaseName + "', padLeft(copyindex($offset),2,'0'))]"
+            )
+            properties = @{ 
+                publisher = "Microsoft.OSTCExtensions"
+                type = "CustomScriptForLinux"
+                typeHandlerVersion = "1.3"
+                autoUpgradeMinorVersion = $true
+                settings = @{ 
+                    fileUris = $fileUris
+                    commandToExecute = $commandToExecute
+                }
+                protectedSettings = @{ 
+                    storageAccountName = $customScriptExtensionStorageAccountName
+                    storageAccountKey = $customScriptExtensionStorageKey
+                }
+            }
+        }
+    }
+}
+
+
 # Set output
-$armTemplate['Outputs'] = @{}
+$armTemplate['outputs'] = @{}
 foreach ($i in $offset..$numberVmsToDeploy){
     $outputVmName = $virtualMachineBaseName + $i.ToString("00")
     $outputNicName = $virtualMachineBaseName + $i.ToString("00") + 'nic1'
@@ -1082,6 +1339,7 @@ Write-Host "Deploying ARM Template..."
 # Convert ARM template into JSON format
 $json = ConvertTo-Json -InputObject $armTemplate -Depth 99
 $json = [regex]::replace($json,'\\u[a-fA-F0-9]{4}',{[char]::ConvertFromUtf32(($args[0].Value -replace '\\u','0x'))})
+$json = $json -replace "\\\\\\","\" # Replace all instances of three backward slashes with just one (workaround using the XML config for VM diagnostics resource)
 
 # Save JSON file
 Out-File -FilePath $jsonFilePath -Force -InputObject $json
@@ -1197,7 +1455,6 @@ if ($staticPrivateIP -and $useAzureDHCP) {
         Remove-Variable -Name "job-$virtualMachineBaseName-$i"
     }
 }
-
 #end region
 
 

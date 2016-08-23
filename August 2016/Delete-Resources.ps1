@@ -1,26 +1,27 @@
 ﻿# Loop through each NIC to create the job to set private IP addresses to static, and start the job
 $vmResourceGroupName = "powershellLearning"
-#$nics = Get-AzureRmNetworkInterface -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "vm*"}
-$nics = Get-AzureRmPublicIpAddress -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "vm*"}
-#$nics = Get-AzureRmVM -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "vm*"}
+$prefix = "test"
+#$resources = Get-AzureRmNetworkInterface -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "$prefix*"}
+#$resources = Get-AzureRmPublicIpAddress -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "$prefix*"}
+$resources = Get-AzureRmVM -ResourceGroupName $vmResourceGroupName | Where-Object {$_.Name -like "$prefix*"}
 $i = 1
 $offset = 1
-$count = ($nics | measure).Count
+$count = ($resources | measure).Count
 
 $ErrorActionPreference = 'Stop'
 
-foreach ($nic in $nics){
+foreach ($resource in $resources){
         
     # Define the script block that will be executed in each block
     $scriptBlock = { 
         # Define the paratemers to be passed to this script block
-        Param($nic) 
+        Param($resource) 
 
         try{
             Import-Module AzureRM.Network
-            #$nic | Remove-AzureRmNetworkInterface -Force
-            $nic | Remove-AzureRmPublicIpAddress -Force
-            #$nic | Remove-AzureRmVM -Force
+            #$resource | Remove-AzureRmNetworkInterface -Force
+            #$resource | Remove-AzureRmPublicIpAddress -Force
+            $resource | Remove-AzureRmVM -Force
         } catch {
             $ErrorMessage = $_.Exception.Message
             Write-Host "Failed with the following message:" -BackgroundColor Black -ForegroundColor Red
@@ -32,9 +33,9 @@ foreach ($nic in $nics){
     New-Variable -Name "psSessionRem-$i" -Value ([PowerShell]::Create())
 
     # Add the script block to the PowerShell session, and add the parameter values
-    (Get-Variable -Name "psSessionRem-$i" -ValueOnly).AddScript($scriptBlock).AddArgument($nic) | Out-Null
+    (Get-Variable -Name "psSessionRem-$i" -ValueOnly).AddScript($scriptBlock).AddArgument($resource) | Out-Null
 
-    Write-Host "Starting job to remove NIC $($nic.Name)..."
+    Write-Host "Starting job to remove resource $($resource.Name)..."
     
     # Start the execution of the script block in the newly-created PowerShell session, and save its execution in a new variable as job
     New-Variable -Name "jobRem-$i" -Value ((Get-Variable -Name "psSessionRem-$i" -ValueOnly).BeginInvoke())
@@ -78,6 +79,6 @@ while($jobsRunning){
 # Delete all the variables holding jobs and PowerShell sessions
 foreach ($i in $offset..$count){
     
-    Remove-Variable -Name "psSessionRem-$i"
-    Remove-Variable -Name "jobRem-$i"
+    Remove-Variable -Name "psSessionRem-$i" -ErrorAction Continue
+    Remove-Variable -Name "jobRem-$i" -ErrorAction Continue
 }

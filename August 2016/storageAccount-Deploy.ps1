@@ -41,20 +41,20 @@ param (
     #######################################
     # Azure and ARM template parameters
     #######################################
-    [string] $subscriptionName = "Visual Studio Enterprise with MSDN",
-    [string] $resourceGroupName = "powershellLearning",
+    [string] $subscriptionName,
+    [string] $resourceGroupName,
 
     [ValidateSet("Central US", "East US", "East US 2", "West US", "North Central US", "South Central US", "West Central US", "West US 2")]
     [string] $location = 'East US 2',
     
-    [string] $deploymentName = "testdeployment5",
-    [string] $templateFilePath = "C:\Users\carpat\OneDrive - Microsoft\Azure-PowerShell\August 2016\storageAccount-Template.json",
+    [string] $deploymentName,
+    [string] $templateFilePath,
 
 
     #######################################
     # Storage Account parameters
     #######################################
-    [string] $storageAccountName = "testvmchar05",
+    [string] $storageAccountName,
 
     [ValidateSet('Premium_LRS','Standard_GRS','Standard_LRS','Standard_RAGRS','Standard_ZRS')]
     [string] $storageAccountType = 'Standard_LRS',
